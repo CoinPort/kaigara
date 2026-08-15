@@ -2,15 +2,26 @@ package main
 
 import (
 	"os"
-	"strings"
 	"testing"
 
+	"github.com/openware/kaigara/cmd/env"
 	"github.com/openware/kaigara/pkg/config"
-	"github.com/openware/kaigara/pkg/sql"
-	"github.com/openware/kaigara/pkg/storage"
-	"github.com/openware/kaigara/utils/testenv"
+	"github.com/openware/kaigara/pkg/database"
+	"github.com/openware/kaigara/pkg/storage/sql"
+	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
 )
+
+var deploymentID = "opendax_uat"
+var sqlCnf = database.Config{
+	Driver: "mysql",
+	Host:   os.Getenv("DATABASE_HOST"),
+	Port:   os.Getenv("DATABASE_PORT"),
+	Name:   "kaigara_" + deploymentID,
+	User:   "root",
+	Pass:   "",
+	Pool:   1,
+}
 
 var vars = []string{
 	"FINEX_DATABASE_USERNAME",
@@ -34,12 +45,15 @@ var vars = []string{
 	"REALTIME_DB_HOST",
 }
 
-var testdataPath = "../testdata/testenv.yml"
-
 func TestMain(m *testing.M) {
-	var err error
-	if conf, err = config.NewKaigaraConfig(); err != nil {
-		panic(err)
+	cnf = &config.KaigaraConfig{
+		VaultAddr:     os.Getenv("KAIGARA_VAULT_ADDR"),
+		VaultToken:    os.Getenv("KAIGARA_VAULT_TOKEN"),
+		DeploymentID:  deploymentID,
+		Scopes:        "public,private,secret",
+		AppNames:      "finex,frontdex,gotrue,postgrest,realtime,storage",
+		EncryptMethod: "transit",
+		DBConfig:      sqlCnf,
 	}
 
 	// exec test and this returns an exit code to pass to os
@@ -48,39 +62,44 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+func TestAppNamesToLoggingName(t *testing.T) {
+	cnf.AppNames = "peatio,peatio_daemons"
+	assert.Equal(t, "peatio&peatio_daemons", appNamesToLoggingName())
+
+	cnf.AppNames = "peatio"
+	assert.Equal(t, "peatio", appNamesToLoggingName())
+	assert.NotEqual(t, "peatio&", appNamesToLoggingName())
+	assert.NotEqual(t, "&peatio", appNamesToLoggingName())
+}
+
 func TestKaigaraPrintenvVault(t *testing.T) {
-	conf.Storage = "vault"
-	conf.AppNames = "finex,frontdex,gotrue,postgrest,realtime,storage"
-	ss := testenv.GetTestStorage(testdataPath, conf)
+	cnf.Storage = "vault"
+	cnf.AppNames = "finex,frontdex,gotrue,postgrest,realtime,storage"
+	store := env.GetStorage(cnf)
+	ls := initLogStream()
 
 	for _, v := range vars {
-		kaigaraRun(ss, "printenv", []string{v})
-	}
-
-	appNames := strings.Split(conf.AppNames, ",")
-	scopes := strings.Split(conf.Scopes, ",")
-	if err := storage.CleanAll(ss, appNames, scopes); err != nil {
-		panic(err)
+		kaigaraRun(ls, store, "printenv", []string{v})
 	}
 }
 
 func TestKaigaraPrintenvSql(t *testing.T) {
-	conf.Storage = "sql"
-	conf.AppNames = "finex,frontdex,gotrue,postgrest,realtime,storage"
-	ss := testenv.GetTestStorage(testdataPath, conf)
+	cnf.Storage = "sql"
+	cnf.AppNames = "finex,frontdex,gotrue,postgrest,realtime,storage"
+	store := env.GetStorage(cnf)
+	ls := initLogStream()
 
 	for _, v := range vars {
-		kaigaraRun(ss, "printenv", []string{v})
+		kaigaraRun(ls, store, "printenv", []string{v})
 	}
 
 	// Cleanup data
-	sqlDB, err := sql.Connect(&conf.DBConfig)
+	sqlDB, err := database.Connect(&sqlCnf)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
-
 	tx := sqlDB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&sql.Data{})
 	if tx.Error != nil {
-		t.Fatal(tx.Error)
+		panic(tx.Error)
 	}
 }

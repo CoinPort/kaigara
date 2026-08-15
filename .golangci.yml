@@ -1,0 +1,30 @@
+# Kaigara wraps other people's daemons, so the linters that matter most are
+# the ones catching silently-dropped errors and unchecked type assertions —
+# both of which this codebase has a history of.
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosimple
+    - misspell
+    - bodyclose
+    - noctx
+
+issues:
+  exclude-rules:
+    # Deferred Close on a read-only handle is idiomatic and not worth
+    # wrapping at every call site.
+    - linters: [errcheck]
+      source: 'defer .*\.Close\(\)'
+
+  # Report everything rather than the default first-50-per-linter, so the
+  # backlog is visible instead of silently truncated.
+  max-issues-per-linter: 0
+  max-same-issues: 0

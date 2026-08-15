@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+    tags: ['*']
+  pull_request:
+
+env:
+  # Release artifacts are built with a current toolchain regardless of the
+  # `go` directive in go.mod. The toolchain, not the directive, is what
+  # determines which standard-library CVEs end up in the shipped binary.
+  GO_VERSION: '1.24'
+
+jobs:
+  check:
+    name: Format, vet and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: gofmt
+        run: make fmt-check
+
+      - name: go vet
+        run: make vet
+
+      - name: Build
+        run: make build
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
+        continue-on-error: true
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    services:
+      vault:
+        image: hashicorp/vault:1.15
+        env:
+          VAULT_DEV_ROOT_TOKEN_ID: root-token
+        ports: ['8200:8200']
+        options: >-
+          --cap-add=IPC_LOCK
+          --health-cmd "wget -q -O- http://127.0.0.1:8200/v1/sys/health || exit 1"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: kaigara_opendax_uat
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_PASSWORD: changeme
+          POSTGRES_DB: kaigara_opendax_uat
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s --health-timeout 3s --health-retries 20
+
+    env:
+      KAIGARA_VAULT_ADDR: http://127.0.0.1:8200
+      KAIGARA_VAULT_TOKEN: root-token
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: '3306'
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Enable the Vault transit engine
+        run: |
+          curl -sf -X POST -H "X-Vault-Token: root-token" \
+            -d '{"type":"transit"}' \
+            http://127.0.0.1:8200/v1/sys/mounts/transit
+
+      # pkg/storage/sql asserts absolute version numbers, so it needs the
+      # storage table empty. The services above are fresh per run.
+      - name: Test
+        run: go test -race ./...
+
+  vulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Scan
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          # Reported for visibility; hashicorp/vault/api still pulls in
+          # go-jose.v2 v2.5.1, which has no fixed release.
+          govulncheck ./... || true
+
+  release:
+    name: Release
+    needs: [check, test]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Cross-compile
+        run: make release VERSION=${{ github.ref_name }}
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            bin/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true

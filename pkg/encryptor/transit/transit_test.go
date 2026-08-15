@@ -9,19 +9,16 @@ import (
 )
 
 func TestEncrypt(t *testing.T) {
-	vaultToken := os.Getenv("KAIGARA_VAULT_TOKEN")
-	vaultAddr := os.Getenv("KAIGARA_VAULT_ADDR")
-	vaultAppName := "finex"
+	vaultToken := os.Getenv("VAULT_TOKEN")
+	vaultAddr := os.Getenv("VAULT_ADDR")
+	vaultAppName := os.Getenv("VAULT_APP_NAME")
 
-	if vaultToken == "" || vaultAddr == "" {
-		t.Fatal("vault settings are not set")
+	if vaultToken == "" || vaultAddr == "" || vaultAppName == "" {
+		t.Skip()
+		return
 	}
 
-	s, err := NewVaultEncryptor(vaultAddr, vaultToken)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	s := NewVaultEncryptor(vaultAddr, vaultToken)
 	cipher, err := s.Encrypt("bonjour", vaultAppName)
 	require.NoError(t, err)
 

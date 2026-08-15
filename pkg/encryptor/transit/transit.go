@@ -15,13 +15,12 @@ type VaultEncryptor struct {
 }
 
 // NewVaultEncryptor instantiate a vault encryption service
-func NewVaultEncryptor(addr, token string) (*VaultEncryptor, error) {
+func NewVaultEncryptor(addr, token string) *VaultEncryptor {
 	if addr == "" {
 		addr = "http://localhost:8200"
 	}
-
 	if token == "" {
-		return nil, fmt.Errorf("vault token is empty")
+		panic("VAULT_TOKEN is missing")
 	}
 
 	config := &api.Config{
@@ -31,7 +30,7 @@ func NewVaultEncryptor(addr, token string) (*VaultEncryptor, error) {
 
 	client, err := api.NewClient(config)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	client.SetToken(token)
 
@@ -39,11 +38,12 @@ func NewVaultEncryptor(addr, token string) (*VaultEncryptor, error) {
 		vault: client,
 	}
 
-	if err := s.startRenewToken(token); err != nil {
-		return nil, err
+	err = s.startRenewToken(token)
+	if err != nil {
+		panic(err)
 	}
 
-	return s, nil
+	return s
 }
 
 func (s *VaultEncryptor) transitKeyExists(appName string) (bool, error) {
@@ -51,7 +51,6 @@ func (s *VaultEncryptor) transitKeyExists(appName string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-
 	return secret != nil, nil
 }
 
@@ -62,7 +61,6 @@ func (s *VaultEncryptor) transitKeyCreate(appName string) error {
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -71,7 +69,6 @@ func (s *VaultEncryptor) createTransitKeyIfNotExist(appName string) error {
 	if err != nil {
 		return err
 	}
-
 	if !ok {
 		err = s.transitKeyCreate(appName)
 		if err != nil {
@@ -79,7 +76,6 @@ func (s *VaultEncryptor) createTransitKeyIfNotExist(appName string) error {
 		}
 		log.Println("INFO: Transit key created")
 	}
-
 	return nil
 }
 
@@ -106,7 +102,8 @@ func (s *VaultEncryptor) Encrypt(plaintext, appName string) (string, error) {
 
 // Decrypt the given ciphertext and return the plaintext or an error
 func (s *VaultEncryptor) Decrypt(ciphertext, appName string) (string, error) {
-	if err := s.createTransitKeyIfNotExist(appName); err != nil {
+	err := s.createTransitKeyIfNotExist(appName)
+	if err != nil {
 		return "", err
 	}
 
@@ -138,7 +135,7 @@ func (s *VaultEncryptor) startRenewToken(token string) error {
 	}
 
 	if !renewable {
-		log.Println("WRN: token is not renewable")
+		log.Println("WARN: token is not renewable")
 		return nil
 	}
 
@@ -155,16 +152,16 @@ func (s *VaultEncryptor) startRenewToken(token string) error {
 		return err
 	}
 
-	log.Println("INF: launching Vault token renewal")
+	log.Println("INFO: launching Vault token renewal")
 	go watcher.Start()
 	go func() {
 		for {
 			select {
 			case err := <-watcher.DoneCh():
-				log.Printf("ERR: token renew failed: %s\n", err.Error())
+				log.Printf("ERROR: Token renew failed: %s\n", err.Error())
 				return
 			case <-watcher.RenewCh():
-				log.Println("INF: successfully renewed token")
+				log.Println("INFO: Successfully renewed token")
 			}
 		}
 	}()
