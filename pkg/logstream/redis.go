@@ -33,26 +33,38 @@ func NewRedisClient(url string) *RedisLogStream {
 	return &RedisLogStream{client: client}
 }
 
+// publishBufSize bounds a single read from the child's pipe. Output longer
+// than this is published as several messages.
+const publishBufSize = 64 * 1024
+
 func (r *RedisLogStream) Publish(channel string, stream io.ReadCloser) {
-	buf := make([]byte, 64)
+	buf := make([]byte, publishBufSize)
 	for {
 		n, err := stream.Read(buf)
-		os.Stdout.Write(buf[:n])
 
-		if r.client != nil {
-			e := r.client.Publish(channel, buf).Err()
-			if e != nil {
-				panic(e)
+		if n > 0 {
+			os.Stdout.Write(buf[:n])
+
+			if r.client != nil {
+				// Publish only the bytes just read. Publishing the whole
+				// buffer appends whatever the previous, longer read left
+				// behind to every short read.
+				if e := r.client.Publish(channel, string(buf[:n])).Err(); e != nil {
+					// A logging failure must not take the wrapped daemon
+					// down with it.
+					log.Printf("ERR: failed to publish on %s: %v", channel, e)
+				}
 			}
 		}
-		if errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed) {
-			break
-		}
 
-		// Debug block in case of unexpected error is returned
-		if n == 0 {
-			log.Println(fmt.Sprintf("ERR: %v", err))
-			log.Println(fmt.Sprintf("Additional infromation:\n Bytes read: %d\n,Buf: %s", n, buf))
+		if err != nil {
+			// Stop on every error, not just EOF. Returning only on EOF or
+			// ErrClosed turns any other persistent read error into a hot
+			// loop that spins on a zero-byte read.
+			if !errors.Is(err, io.EOF) && !errors.Is(err, os.ErrClosed) {
+				log.Printf("ERR: reading %s stream: %v", channel, err)
+			}
+			return
 		}
 	}
 }
