@@ -1,8 +1,20 @@
+# Where the test suite expects MySQL and PostgreSQL to be listening.
+#
+# 127.0.0.1 is correct for both supported ways of running the suite:
+# etc/backend.yml publishes on the loopback interface, and the CI service
+# containers are port-mapped to the runner's localhost.
+#
+# These were previously "mysql" and "postgres" -- Docker Compose service
+# names, which only resolve from inside the compose network. That worked
+# under Drone, which ran the tests as a container attached to that network,
+# and stopped working when CI moved to GitHub Actions runners.
+#
+# Set DATABASE_HOST to override both if you do run the suite in-network.
 mysql:
   name: mysql
   database:
     driver: mysql
-    host: mysql
+    host: 127.0.0.1
     port: 3306
     user: root
     pass: ""
@@ -12,7 +24,7 @@ postgres:
   name: postgres
   database:
     driver: postgres
-    host: postgres
+    host: 127.0.0.1
     port: 5432
     user: postgres
     pass: changeme

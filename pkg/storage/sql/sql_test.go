@@ -13,6 +13,7 @@ import (
 	"github.com/openware/kaigara/pkg/encryptor/transit"
 	"github.com/openware/kaigara/pkg/encryptor/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -49,8 +50,18 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
+	// cmd/kaigara's tests already take their host from DATABASE_HOST; honour
+	// it here too so both suites are pointed by the same variable. Only the
+	// host: MySQL and PostgreSQL do not share a port, so DATABASE_PORT is
+	// deliberately not applied -- CI sets it to 3306, which would send the
+	// PostgreSQL config to the MySQL server.
+	host := os.Getenv("DATABASE_HOST")
+
 	configs = make(map[string]database.Config)
 	for _, cfg := range cfgs {
+		if host != "" {
+			cfg.DbConfig.Host = host
+		}
 		configs[cfg.Name] = cfg.DbConfig
 	}
 	aesEncrypt, err := aes.NewAESEncryptor([]byte("1234567890123456"))
@@ -132,7 +143,7 @@ func TestSetEntry(t *testing.T) {
 	for _, encryptor := range encryptors {
 		for _, cnf := range configs {
 			ss, err := NewStorageService(deploymentID, &cnf, encryptor, logger.Silent)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			defer ss.Close()
 
 			// Start from a known-empty table. These tests assert on absolute
@@ -152,7 +163,7 @@ func TestSetEntry(t *testing.T) {
 
 					// Verify the written data with new storage
 					ssTmp, err := NewStorageService(deploymentID, &cnf, encryptor, logger.Silent)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 
 					result := getEntriesReload(ssTmp, appName, scope)
 					assert.NoError(t, err)
@@ -175,7 +186,7 @@ func TestDeleteEntry(t *testing.T) {
 	for _, encryptor := range encryptors {
 		for _, cnf := range configs {
 			ss, err := NewStorageService(deploymentID, &cnf, encryptor, logger.Silent)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			defer ss.Close()
 
 			// Start from a known-empty table. These tests assert on absolute
@@ -206,7 +217,7 @@ func TestDeleteEntry(t *testing.T) {
 					assert.NoError(t, err)
 
 					ssTmp, err := NewStorageService(deploymentID, &cnf, encryptor, logger.Silent)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 
 					entry = getEntryReload(ssTmp, appName, scope, key)
 					assert.Equal(t, nil, entry)
@@ -225,7 +236,7 @@ func TestListAppNames(t *testing.T) {
 	for _, encryptor := range encryptors {
 		for _, cnf := range configs {
 			ss, err := NewStorageService(deploymentID, &cnf, encryptor, logger.Silent)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			defer ss.Close()
 
 			// Start from a known-empty table. These tests assert on absolute
@@ -245,7 +256,7 @@ func TestListAppNames(t *testing.T) {
 			}
 
 			ssTmp, err := NewStorageService(deploymentID, &cnf, encryptor, logger.Silent)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			apps, err := ssTmp.ListAppNames()
 			sort.Strings(apps)
@@ -263,7 +274,7 @@ func TestStorageServiceSetGetEntriesIncreaseVersion(t *testing.T) {
 	for _, encryptor := range encryptors {
 		for _, cnf := range configs {
 			ss, err := NewStorageService(deploymentID, &cnf, encryptor, logger.Silent)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			defer ss.Close()
 
 			// Start from a known-empty table. These tests assert on absolute
@@ -281,7 +292,7 @@ func TestStorageServiceSetGetEntriesIncreaseVersion(t *testing.T) {
 
 					// Create a StorageService from scratch
 					ssTmp, err := NewStorageService(deploymentID, &cnf, encryptor, logger.Silent)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 
 					// Get and assert Entries in each scope after save
 					entry := getEntryReload(ssTmp, appName, scope, "key_"+scope)
@@ -302,7 +313,7 @@ func TestStorageServiceSetGetEntriesIncreaseVersion(t *testing.T) {
 					assert.NoError(t, err)
 
 					ssTmp2, err := NewStorageService(deploymentID, &cnf, encryptor, logger.Silent)
-					assert.NoError(t, err)
+					require.NoError(t, err)
 
 					data = getEntriesReload(ssTmp2, appName, scope)
 					assert.Equal(t, map[string]interface{}{"version": int64(1)}, data)
