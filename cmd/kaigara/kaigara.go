@@ -146,8 +146,20 @@ func kaigaraRun(ls logstream.LogStream, store types.Storage, cmd string, cmdArgs
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 	defer signal.Stop(sigCh)
 
+	// watchSecrets polls on a ticker until it is told to stop. Without this
+	// signal the goroutine outlives the call: kaigaraRun returns as soon as
+	// the child exits, but the ticker keeps firing and the poller keeps
+	// reading the package-level cnf that the next call may already be
+	// writing. One leaked poller per restart, and a data race with it.
+	watchDone := make(chan struct{})
+	defer close(watchDone)
+
 	restart := make(chan string, 1)
-	go watchSecrets(store, scopes, restart)
+	// parseAppNames is called here rather than inside watchSecrets so the
+	// package-level cnf is read on this goroutine, before the poller starts.
+	// Closing watchDone asks the poller to stop but does not wait for it, so
+	// a read left inside it would still be live after kaigaraRun returns.
+	go watchSecrets(store, parseAppNames(), scopes, restart, watchDone)
 
 	quit := make(chan int)
 	go func() {
@@ -241,17 +253,25 @@ func initLogStream() logstream.LogStream {
 // watchSecrets polls the store and reports the first scope whose version has
 // moved on. It does not stop the child itself; the supervisor loop owns that,
 // so the shutdown is graceful and there is one place that signals the process.
-func watchSecrets(store types.Storage, scopes []string, restart chan<- string) {
-	appNames := parseAppNames()
-
+func watchSecrets(store types.Storage, appNames, scopes []string, restart chan<- string, done <-chan struct{}) {
 	if ignore, ok := os.LookupEnv("KAIGARA_IGNORE_GLOBAL"); !ok || ignore != "true" {
-		appNames = append(appNames, "global")
+		// Copy rather than append in place: the caller's slice may share a
+		// backing array, and this poller must not write through it.
+		watched := make([]string, len(appNames), len(appNames)+1)
+		copy(watched, appNames)
+		appNames = append(watched, "global")
 	}
 
 	ticker := time.NewTicker(pollInterval())
 	defer ticker.Stop()
 
-	for range ticker.C {
+	for {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+		}
+
 		for _, appName := range appNames {
 			for _, scope := range scopes {
 				current, err := store.GetCurrentVersion(appName, scope)
