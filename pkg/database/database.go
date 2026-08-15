@@ -5,7 +5,6 @@ import (
 
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -22,7 +21,13 @@ func Connect(cnf *Config) (*gorm.DB, error) {
 
 	switch cnf.Driver {
 	case "memory":
-		dial = sqlite.Open(":memory:")
+		// Built only when cgo is available -- see sqlite_cgo.go and
+		// sqlite_nocgo.go. Returns a Kaigara-level error rather than
+		// go-sqlite3's cgo stub message when it is not.
+		dial, err = sqliteDialector()
+		if err != nil {
+			return nil, err
+		}
 
 	case "mysql":
 		dsn = fmt.Sprintf(

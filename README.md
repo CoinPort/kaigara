@@ -128,6 +128,12 @@ With `KAIGARA_STORAGE_DRIVER=sql`, the database is configured by
 `DATABASE_PASS` and `DATABASE_POOL`. The database **name is always**
 `kaigara_<KAIGARA_DEPLOYMENT_ID>` — `DATABASE_NAME` is overwritten.
 
+`DATABASE_DRIVER` takes `mysql` or `postgres`. There is a third value,
+`memory`, which is **for the test suite only**: it is in-memory SQLite, so it
+persists nothing, and SQLite needs cgo. Released binaries are built with
+`CGO_ENABLED=0` to stay static, so they do not contain the SQLite driver at
+all and `memory` returns an error explaining as much.
+
 `KAIGARA_*` variables are **stripped** from the child process's environment.
 The daemon never sees Kaigara's own configuration.
 

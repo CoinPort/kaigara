@@ -13,6 +13,10 @@ import (
 // Test connection to invalid config, wrong adapter, and more
 func Test_Connect(t *testing.T) {
 	t.Run("Connection to sqlite", func(t *testing.T) {
+		if !database.SQLiteAvailable {
+			t.Skip("built without cgo: the memory driver needs SQLite")
+		}
+
 		_, err := database.Connect(&database.Config{
 			Driver: "memory",
 			Pool:   5,
@@ -40,6 +44,10 @@ func Test_Connect(t *testing.T) {
 	})
 
 	t.Run("Proper configuration", func(t *testing.T) {
+		if !database.SQLiteAvailable {
+			t.Skip("built without cgo: the memory driver needs SQLite")
+		}
+
 		const configFile = `
 port: 6009
 database:
@@ -83,6 +91,10 @@ database:
 
 func Test_Create(t *testing.T) {
 	t.Run("Create database with sqlite driver", func(t *testing.T) {
+		if !database.SQLiteAvailable {
+			t.Skip("built without cgo: the memory driver needs SQLite")
+		}
+
 		err := database.Create(&database.Config{
 			Driver: "memory",
 			Pool:   5,
@@ -95,6 +107,10 @@ func Test_Create(t *testing.T) {
 
 func Test_Drop(t *testing.T) {
 	t.Run("Drop database with sqlite driver", func(t *testing.T) {
+		if !database.SQLiteAvailable {
+			t.Skip("built without cgo: the memory driver needs SQLite")
+		}
+
 		err := database.Drop(&database.Config{
 			Driver: "memory",
 			Pool:   5,
