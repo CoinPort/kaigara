@@ -15,23 +15,11 @@ import (
 
 	"github.com/openware/kaigara/pkg/config"
 	"github.com/openware/kaigara/pkg/logstream"
-	"github.com/openware/kaigara/pkg/vault"
 	"github.com/openware/kaigara/types"
 	"github.com/openware/pkg/ika"
 )
 
 var cnf = &config.KaigaraConfig{}
-
-func initConfig() {
-	err := ika.ReadConfig("", cnf)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func getVaultService() *vault.Service {
-	return vault.NewService(cnf.VaultAddr, cnf.VaultToken, cnf.DeploymentID)
-}
 
 func parseScopes() []string {
 	return strings.Split(cnf.Scopes, ",")
@@ -45,17 +33,21 @@ func appNamesToLoggingName() string {
 	return strings.Join(parseAppNames(), "&")
 }
 
-func kaigaraRun(ls logstream.LogStream, secretStore types.SecretStore, cmd string, cmdArgs []string) {
+func kaigaraRun(ls logstream.LogStream, store types.Storage, cmd string, cmdArgs []string) {
 	log.Printf("Starting command: %s %v", cmd, cmdArgs)
 	scopes := parseScopes()
 	c := exec.Command(cmd, cmdArgs...)
-	env := config.BuildCmdEnv(parseAppNames(), secretStore, os.Environ(), scopes)
+	env := config.BuildCmdEnv(parseAppNames(), store, os.Environ(), scopes)
 
 	c.Env = env.Vars
 
 	for _, file := range env.Files {
-		os.MkdirAll(path.Dir(file.Path), 0750)
-		err := ioutil.WriteFile(file.Path, []byte(file.Content), 0640)
+		err := os.MkdirAll(path.Dir(file.Path), 0750)
+		if err != nil {
+			panic(fmt.Sprintf("Failed to make dir %s: %s", file.Path, err.Error()))
+		}
+
+		err = ioutil.WriteFile(file.Path, []byte(file.Content), 0640)
 		if err != nil {
 			panic(fmt.Sprintf("Failed to write file %s: %s", file.Path, err.Error()))
 		}
@@ -78,9 +70,16 @@ func kaigaraRun(ls logstream.LogStream, secretStore types.SecretStore, cmd strin
 			} else if err != nil {
 				panic(err)
 			}
-			stdin.Write(line)
+			_, err = stdin.Write(line)
+			if err != nil {
+				panic(err)
+			}
+
 			if !isPrefix {
-				stdin.Write([]byte("\n"))
+				_, err = stdin.Write([]byte("\n"))
+				if err != nil {
+					panic(err)
+				}
 			}
 		}
 	}()
@@ -115,7 +114,7 @@ func kaigaraRun(ls logstream.LogStream, secretStore types.SecretStore, cmd strin
 		log.Fatal(err)
 	}
 
-	go exitWhenSecretsOutdated(c, secretStore, scopes)
+	go exitWhenSecretsOutdated(c, store, scopes)
 
 	quit := make(chan int)
 	go func() {
@@ -137,7 +136,7 @@ func initLogStream() logstream.LogStream {
 	return logstream.NewRedisClient(url)
 }
 
-func exitWhenSecretsOutdated(c *exec.Cmd, secretStore types.SecretStore, scopes []string) {
+func exitWhenSecretsOutdated(c *exec.Cmd, store types.Storage, scopes []string) {
 	appNames := append(parseAppNames(), "global")
 
 	if ignore, ok := os.LookupEnv("KAIGARA_IGNORE_GLOBAL"); ok && ignore == "true" {
@@ -147,12 +146,12 @@ func exitWhenSecretsOutdated(c *exec.Cmd, secretStore types.SecretStore, scopes 
 	for range time.Tick(time.Second * 20) {
 		for _, appName := range appNames {
 			for _, scope := range scopes {
-				current, err := secretStore.GetCurrentVersion(appName, scope)
+				current, err := store.GetCurrentVersion(appName, scope)
 				if err != nil {
 					log.Println(err.Error())
 					break
 				}
-				latest, err := secretStore.GetLatestVersion(appName, scope)
+				latest, err := store.GetLatestVersion(appName, scope)
 				if err != nil {
 					log.Println(err.Error())
 					break
@@ -174,8 +173,15 @@ func main() {
 		panic("Usage: kaigara CMD [ARGS...]")
 	}
 	ls := initLogStream()
-	initConfig()
-	secretStore := getVaultService()
 
-	kaigaraRun(ls, secretStore, os.Args[1], os.Args[2:])
+	if err := ika.ReadConfig("", cnf); err != nil {
+		panic(err)
+	}
+
+	store, err := config.GetStorageService(cnf)
+	if err != nil {
+		panic(err)
+	}
+
+	kaigaraRun(ls, store, os.Args[1], os.Args[2:])
 }

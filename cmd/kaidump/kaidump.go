@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 
 	"github.com/openware/kaigara/pkg/config"
-	"github.com/openware/kaigara/pkg/vault"
+	"github.com/openware/kaigara/types"
 
 	"strings"
 
@@ -17,28 +17,36 @@ import (
 
 var cnf = &config.KaigaraConfig{}
 
-func initConfig() {
-	err := ika.ReadConfig("", cnf)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func getVaultService(appName string) *vault.Service {
-	return vault.NewService(cnf.VaultAddr, cnf.VaultToken, cnf.DeploymentID)
-}
-
 func main() {
 	// Parse flags
 	filepath := flag.String("a", "outputs.yaml", "Outputs file path to save secrets from vault")
 	flag.Parse()
 
 	// Initialize and write to Vault stores for every component
-	initConfig()
-	secretStore := getVaultService("global")
+	if err := ika.ReadConfig("", cnf); err != nil {
+		panic(err)
+	}
 
+	secretStore, err := config.GetStorageService(cnf)
+	if err != nil {
+		panic(err)
+	}
+
+	b := kaidumpRun(secretStore)
+	fmt.Print(b.String())
+
+	// Write secrets into filepath
+	err = ioutil.WriteFile(*filepath, b.Bytes(), 0644)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("# Saved the dump into %s\n", *filepath)
+}
+
+func kaidumpRun(store types.Storage) bytes.Buffer {
 	// Get the list of App names from vault
-	apps, err := secretStore.ListAppNames()
+	apps, err := store.ListAppNames()
 	if err != nil {
 		panic(err)
 	}
@@ -60,11 +68,11 @@ func main() {
 		scopeMap := make(map[string]interface{})
 		scopeInit := make(map[string]interface{})
 		for _, scope := range scopesList {
-			err := secretStore.LoadSecrets(app, scope)
+			err := store.Read(app, scope)
 			if err != nil {
 				panic(err)
 			}
-			secrets, err := secretStore.GetSecrets(app, scope)
+			secrets, err := store.GetEntries(app, scope)
 			if err != nil {
 				panic(err)
 			}
@@ -81,15 +89,10 @@ func main() {
 	var b bytes.Buffer
 	yamlEncoder := yaml.NewEncoder(&b)
 	yamlEncoder.SetIndent(2)
-	yamlEncoder.Encode(&secretsMap)
-
-	fmt.Print(b.String())
-
-	// Write secrets into filepath
-	err = ioutil.WriteFile(*filepath, b.Bytes(), 0644)
+	err = yamlEncoder.Encode(&secretsMap)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("# Saved the dump into %s\n", *filepath)
+	return b
 }

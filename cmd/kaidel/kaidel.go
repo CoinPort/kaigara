@@ -3,27 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
-
-	"github.com/openware/kaigara/pkg/config"
-	"github.com/openware/kaigara/pkg/vault"
-
 	"strings"
 
+	"github.com/openware/kaigara/pkg/config"
 	"github.com/openware/pkg/ika"
 )
 
 var cnf = &config.KaigaraConfig{}
-
-func initConfig() {
-	err := ika.ReadConfig("", cnf)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func getVaultService(appName string) *vault.Service {
-	return vault.NewService(cnf.VaultAddr, cnf.VaultToken, cnf.DeploymentID)
-}
 
 func main() {
 	// Parse flags
@@ -46,8 +32,14 @@ func main() {
 	}
 
 	// Initialize and write to Vault stores for every component
-	initConfig()
-	secretStore := getVaultService("global")
+	if err := ika.ReadConfig("", cnf); err != nil {
+		panic(err)
+	}
+
+	store, err := config.GetStorageService(cnf)
+	if err != nil {
+		panic(err)
+	}
 
 	// Get the list of scopes by Splitting KAIGARA_SCOPES env
 	scopesList := strings.Split(*scopes, ",")
@@ -56,13 +48,18 @@ func main() {
 	}
 
 	for _, scope := range scopesList {
-		err := secretStore.LoadSecrets(*appName, scope)
+		err := store.Read(*appName, scope)
 		if err != nil {
 			panic(err)
 		}
 
 		fmt.Printf("Deleting %s.%s.%s\n", *appName, scope, *keyName)
-		err = secretStore.DeleteSecret(*appName, *keyName, scope)
+		err = store.DeleteEntry(*appName, scope, *keyName)
+		if err != nil {
+			panic(err)
+		}
+
+		err = store.Write(*appName, scope)
 		if err != nil {
 			panic(err)
 		}
