@@ -7,11 +7,11 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/openware/kaigara/pkg/database"
 	"github.com/openware/kaigara/pkg/encryptor/aes"
 	"github.com/openware/kaigara/pkg/encryptor/plaintext"
 	"github.com/openware/kaigara/pkg/encryptor/transit"
 	"github.com/openware/kaigara/pkg/encryptor/types"
-	"github.com/openware/pkg/database"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
@@ -118,6 +118,12 @@ func clearStorage(cnf database.Config) error {
 		return err
 	}
 
+	// Connect opens a fresh pool every call; close it or the suite exhausts
+	// the server's connection limit.
+	if sqlDB, dbErr := db.DB(); dbErr == nil {
+		defer sqlDB.Close()
+	}
+
 	tx := db.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Data{})
 	return tx.Error
 }
@@ -127,6 +133,13 @@ func TestSetEntry(t *testing.T) {
 		for _, cnf := range configs {
 			ss, err := NewStorageService(deploymentID, &cnf, encryptor, logger.Silent)
 			assert.NoError(t, err)
+			defer ss.Close()
+
+			// Start from a known-empty table. These tests assert on absolute
+			// version numbers, so leftover rows from an earlier test (or an
+			// earlier encryptor in this loop) make them order-dependent.
+			// NewStorageService above populates cnf.Name, so this must follow it.
+			assert.NoError(t, clearStorage(cnf))
 
 			for _, scope := range scopes {
 				for _, appName := range appNames {
@@ -147,6 +160,8 @@ func TestSetEntry(t *testing.T) {
 
 					entry := getEntryReload(ssTmp, appName, scope, name)
 					assert.Equal(t, val, entry.(string))
+
+					assert.NoError(t, ssTmp.Close())
 				}
 			}
 
@@ -161,6 +176,13 @@ func TestDeleteEntry(t *testing.T) {
 		for _, cnf := range configs {
 			ss, err := NewStorageService(deploymentID, &cnf, encryptor, logger.Silent)
 			assert.NoError(t, err)
+			defer ss.Close()
+
+			// Start from a known-empty table. These tests assert on absolute
+			// version numbers, so leftover rows from an earlier test (or an
+			// earlier encryptor in this loop) make them order-dependent.
+			// NewStorageService above populates cnf.Name, so this must follow it.
+			assert.NoError(t, clearStorage(cnf))
 
 			for _, scope := range scopes {
 				for _, appName := range appNames {
@@ -188,6 +210,8 @@ func TestDeleteEntry(t *testing.T) {
 
 					entry = getEntryReload(ssTmp, appName, scope, key)
 					assert.Equal(t, nil, entry)
+
+					assert.NoError(t, ssTmp.Close())
 				}
 			}
 
@@ -202,6 +226,13 @@ func TestListAppNames(t *testing.T) {
 		for _, cnf := range configs {
 			ss, err := NewStorageService(deploymentID, &cnf, encryptor, logger.Silent)
 			assert.NoError(t, err)
+			defer ss.Close()
+
+			// Start from a known-empty table. These tests assert on absolute
+			// version numbers, so leftover rows from an earlier test (or an
+			// earlier encryptor in this loop) make them order-dependent.
+			// NewStorageService above populates cnf.Name, so this must follow it.
+			assert.NoError(t, clearStorage(cnf))
 
 			for _, appName := range appNames {
 				for _, scope := range scopes {
@@ -220,6 +251,7 @@ func TestListAppNames(t *testing.T) {
 			sort.Strings(apps)
 			assert.NoError(t, err)
 			assert.Equal(t, appNames, apps)
+			assert.NoError(t, ssTmp.Close())
 
 			err = clearStorage(cnf)
 			assert.NoError(t, err)
@@ -232,6 +264,13 @@ func TestStorageServiceSetGetEntriesIncreaseVersion(t *testing.T) {
 		for _, cnf := range configs {
 			ss, err := NewStorageService(deploymentID, &cnf, encryptor, logger.Silent)
 			assert.NoError(t, err)
+			defer ss.Close()
+
+			// Start from a known-empty table. These tests assert on absolute
+			// version numbers, so leftover rows from an earlier test (or an
+			// earlier encryptor in this loop) make them order-dependent.
+			// NewStorageService above populates cnf.Name, so this must follow it.
+			assert.NoError(t, clearStorage(cnf))
 
 			for _, scope := range scopes {
 				for _, appName := range appNames {
@@ -267,6 +306,9 @@ func TestStorageServiceSetGetEntriesIncreaseVersion(t *testing.T) {
 
 					data = getEntriesReload(ssTmp2, appName, scope)
 					assert.Equal(t, map[string]interface{}{"version": int64(1)}, data)
+
+					assert.NoError(t, ssTmp.Close())
+					assert.NoError(t, ssTmp2.Close())
 				}
 			}
 

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/openware/kaigara/pkg/config"
-	"github.com/openware/pkg/ika"
+	"github.com/openware/kaigara/pkg/ika"
 )
 
 var cnf = &config.KaigaraConfig{}

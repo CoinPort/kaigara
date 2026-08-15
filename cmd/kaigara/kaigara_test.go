@@ -6,8 +6,8 @@ import (
 
 	"github.com/openware/kaigara/cmd/env"
 	"github.com/openware/kaigara/pkg/config"
+	"github.com/openware/kaigara/pkg/database"
 	"github.com/openware/kaigara/pkg/storage/sql"
-	"github.com/openware/pkg/database"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
 )

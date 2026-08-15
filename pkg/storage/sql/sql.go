@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/openware/kaigara/pkg/database"
 	"github.com/openware/kaigara/pkg/encryptor/types"
-	"github.com/openware/pkg/database"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -47,6 +47,23 @@ func NewStorageService(deploymentID string, cnf *database.Config, encryptor type
 		deploymentID: deploymentID,
 		encryptor:    encryptor,
 	}, nil
+}
+
+// Close releases the underlying connection pool. Every NewStorageService call
+// opens a new pool, so callers that build more than one service over the life
+// of a process must close the ones they finish with or they will exhaust the
+// server's connection limit.
+func (ss *StorageService) Close() error {
+	if ss == nil || ss.db == nil {
+		return nil
+	}
+
+	sqlDB, err := ss.db.DB()
+	if err != nil {
+		return err
+	}
+
+	return sqlDB.Close()
 }
 
 func (ss *StorageService) Read(appName, scope string) error {

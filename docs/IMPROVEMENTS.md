@@ -347,7 +347,7 @@ surface is small, and the risky part of it is all Openware-hosted.
 | Module | Used by | Size | Recommendation |
 | --- | --- | --- | --- |
 | `github.com/openware/kaigara/pkg/vault` | root module | 1 file, ~420 LOC | **Merge into the root module.** It is already in this repo — see [C1](#c1). The submodule split provides no benefit and actively breaks the build's relationship to the source |
-| `github.com/openware/pkg/ika` | all 4 `main` packages | 1 file, 559 LOC, MIT, one dep (`yaml.v2`) | **Vendor or replace.** It is a struct-tag env/YAML config loader. Either copy it in under `pkg/ika` preserving the MIT notice, or drop it — the config struct has six fields and `os.Getenv` would do. Note the code passes `ika.ReadConfig("")`, so only the env-var half is used |
+| `github.com/openware/kaigara/pkg/ika` | all 4 `main` packages | 1 file, 559 LOC, MIT, one dep (`yaml.v2`) | **Vendor or replace.** It is a struct-tag env/YAML config loader. Either copy it in under `pkg/ika` preserving the MIT notice, or drop it — the config struct has six fields and `os.Getenv` would do. Note the code passes `ika.ReadConfig("")`, so only the env-var half is used |
 
 On `origin/master` the surface is larger — four in-repo submodules
 (`pkg/{vault,encryptor,k8s,sql}`) plus `openware/pkg/{ika,kli,kube}`, all resolved from GitHub with

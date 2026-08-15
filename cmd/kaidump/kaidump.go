@@ -11,7 +11,7 @@ import (
 
 	"strings"
 
-	"github.com/openware/pkg/ika"
+	"github.com/openware/kaigara/pkg/ika"
 	"gopkg.in/yaml.v3"
 )
 

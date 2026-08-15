@@ -2,25 +2,28 @@ module github.com/openware/kaigara
 
 go 1.14
 
-replace github.com/openware/kaigara/pkg/encryptor => ./pkg/encryptor
-
-replace github.com/openware/kaigara/pkg/storage/sql => ./pkg/storage/sql
-
-replace github.com/openware/kaigara/pkg/storage/vault => ./pkg/storage/vault
-
 require (
 	github.com/go-redis/redis/v7 v7.2.0
-	github.com/hashicorp/go-retryablehttp v0.6.8 // indirect
-	github.com/mattn/go-sqlite3 v1.14.11 // indirect
-	github.com/openware/kaigara/pkg/encryptor v0.0.0-20220225091359-d368f0dfe8db
-	github.com/openware/kaigara/pkg/storage/sql v0.0.0-20220301034206-c8eea45f3512
-	github.com/openware/kaigara/pkg/storage/vault v0.0.0-20220301034206-c8eea45f3512
-	github.com/openware/pkg v0.0.0-20220225074124-ddad5f429a07
-	github.com/pierrec/lz4 v2.6.0+incompatible // indirect
-	github.com/stretchr/testify v1.7.0
-	golang.org/x/crypto v0.0.0-20211215165025-cf75a172585e // indirect
-	golang.org/x/net v0.0.0-20210805182204-aaa1db679c0d // indirect
-	golang.org/x/sys v0.0.0-20210809222454-d867a43fc93e // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
+	github.com/go-sql-driver/mysql v1.8.1 // indirect
+	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
+	github.com/golang-sql/sqlexp v0.1.0 // indirect
+	github.com/hashicorp/go-uuid v1.0.3 // indirect
+	github.com/hashicorp/vault/api v1.3.1
+	github.com/iancoleman/strcase v0.3.0
+	github.com/jackc/pgservicefile v0.0.0-20231201235250-de7065d80cb9 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
+	github.com/kr/pretty v0.3.0 // indirect
+	github.com/mattn/go-sqlite3 v1.14.15 // indirect
+	github.com/stretchr/testify v1.8.4
+	golang.org/x/text v0.20.0 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
+	gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v3 v3.0.1
+	gorm.io/datatypes v1.0.5
+	gorm.io/driver/mysql v1.2.3
+	gorm.io/driver/postgres v1.2.3
+	gorm.io/driver/sqlite v1.2.6
+	gorm.io/driver/sqlserver v1.3.0 // indirect
 	gorm.io/gorm v1.22.5
+	gotest.tools v2.2.0+incompatible
 )

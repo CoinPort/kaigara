@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/openware/kaigara/pkg/config"
+	"github.com/openware/kaigara/pkg/ika"
 	"github.com/openware/kaigara/types"
-	"github.com/openware/pkg/ika"
 )
 
 func main() {

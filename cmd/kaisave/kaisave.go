@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 
 	"github.com/openware/kaigara/pkg/config"
-	"github.com/openware/pkg/ika"
+	"github.com/openware/kaigara/pkg/ika"
 	"gopkg.in/yaml.v3"
 )
 

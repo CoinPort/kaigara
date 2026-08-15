@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/openware/kaigara/pkg/database"
 	"github.com/openware/kaigara/pkg/encryptor/aes"
 	"github.com/openware/kaigara/pkg/encryptor/plaintext"
 	"github.com/openware/kaigara/pkg/encryptor/transit"
@@ -15,7 +16,6 @@ import (
 	"github.com/openware/kaigara/pkg/storage/sql"
 	"github.com/openware/kaigara/pkg/storage/vault"
 	"github.com/openware/kaigara/types"
-	"github.com/openware/pkg/database"
 	"gorm.io/gorm/logger"
 )
 

@@ -45,7 +45,7 @@ func (r *RedisLogStream) Publish(channel string, stream io.ReadCloser) {
 				panic(e)
 			}
 		}
-		if errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed){
+		if errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed) {
 			break
 		}
 
