@@ -1,38 +1,57 @@
-version: '3'
+# Local development and test dependencies.
+#
+#   make test-env-up     start everything and enable the transit engine
+#   make test            run the suite against it
+#   make test-env-down   stop and delete the volumes
+#
+# Ports are bound to 127.0.0.1 so this cannot collide with a deployed stack
+# on the same host, and the volumes are anonymous so every `down -v` gives
+# the tests the empty storage they assume.
 services:
   redis:
-    image: "redis:5-alpine"
+    image: "redis:7-alpine"
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   vault:
-    image: vault:0.11.4
+    # The `vault` image on Docker Hub is deprecated in favour of
+    # `hashicorp/vault`. Kaigara needs kv v2, which dev mode mounts at
+    # secret/ by default, plus the transit engine that make test-env-up
+    # enables.
+    image: hashicorp/vault:1.15
     ports:
-      - "8200:8200"
+      - "127.0.0.1:8200:8200"
+    cap_add:
+      - IPC_LOCK
     environment:
-      SKIP_SETCAP: 1
-      VAULT_TOKEN: changeme
       VAULT_DEV_ROOT_TOKEN_ID: changeme
-      VAULT_ADDR: http://vault:8200
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+      VAULT_ADDR: http://127.0.0.1:8200
+      VAULT_TOKEN: changeme
 
   mysql:
     image: mysql:8
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     environment:
       MYSQL_DATABASE: "kaigara_opendax_uat"
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   postgres:
-    image: supabase/postgres:13.3.0
+    image: postgres:14
     ports:
-      - "5432:5432"
-    command:
-      - postgres
-      - -c
-      - wal_level=logical
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_DB: kaigara_opendax_uat
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: changeme
-      POSTGRES_PORT: "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
