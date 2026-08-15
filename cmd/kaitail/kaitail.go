@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
-	"regexp"
 
 	"github.com/openware/kaigara/pkg/logstream"
 	"github.com/openware/kaigara/pkg/utils"
@@ -21,20 +19,16 @@ func main() {
 	ls := logstream.NewRedisClient(utils.GetEnv("KAIGARA_REDIS_URL", "redis://localhost:6379/0"))
 	ch := ls.Subscribe(*channel)
 
-	re := regexp.MustCompile(`^Message<(log\.[A-z.]+?): (.+?)>$`)
-
+	// The channel and payload are fields on the message. This used to
+	// reconstruct them by regex-matching the message's formatted string,
+	// which dropped every multi-line payload -- "." does not match newlines
+	// -- and whose [A-z.] class also spanned the punctuation between the
+	// upper- and lower-case ASCII ranges.
 	for msg := range ch {
-		rs := re.FindStringSubmatch(msg.String())
-
-		if len(rs) < 2 {
-			log.Printf("Could not parse message: %s\n", msg)
-			continue
-		}
-
 		if *showName {
-			fmt.Printf("%s: %s\n", rs[1], rs[2])
+			fmt.Printf("%s: %s\n", msg.Channel, msg.Payload)
 		} else {
-			fmt.Printf("%s\n", rs[2])
+			fmt.Printf("%s\n", msg.Payload)
 		}
 	}
 }

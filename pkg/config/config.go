@@ -156,10 +156,13 @@ func BuildCmdEnv(appNames []string, store types.Storage, currentEnv, scopes []st
 					env.Files[name] = f
 				}
 				switch suffix {
+				// Use the already-normalised val rather than re-asserting on
+				// the raw value: an unquoted KFILE_X_PATH arrives as a
+				// json.Number and v.(string) panics the process at startup.
 				case "PATH":
-					f.Path = v.(string)
+					f.Path = val
 				case "CONTENT":
-					f.Content = v.(string)
+					f.Content = val
 				default:
 					log.Printf("ERROR: Unexpected prefix in config key: %s", k)
 				}

@@ -2,80 +2,82 @@
 
 How Kaigara is built, versioned, and deployed in the CoinPort stack.
 
-## Version map
+## Version history
 
-This is the source of the "which version should we use" confusion. There are **two parallel
-release lines** in the same repository, with different tag formats, different code, and different
-release asset names.
-
-| | `0.1.x` line | `1.0.x` line |
-| --- | --- | --- |
-| Branch | `1-0-stable` *(the checked-out branch)* | `origin/master` |
-| Tag format | `0.1.34` (no `v`) | `v1.0.36` (with `v`) |
-| Latest tag | `0.1.34` — 2022-03-25 | `v1.0.36` — 2023-07-26 |
-| CLI shape | `kaigara`, `kaisave`, `kaidump`, `kaidel`, `kaitail` | `kaigara` + one unified `kai` binary with `save`/`dump`/`del`/`env` subcommands |
-| Backends | Vault only | Vault, SQL (`pkg/sql`), Kubernetes (`pkg/k8s`) |
-| Encryption | Vault transit, hard-wired | Pluggable `pkg/encryptor`: `transit`, `aes`, `plaintext` |
-| On secret change | `SIGKILL`s the child and relies on `restart: always` | Restarts the child in-process |
-| **Deployed today** | **Yes** — Peatio and Barong pin `0.1.34` | No — present as a commented-out `#ARG KAIGARA_VERSION=v1.0.28` |
-
-> **The tag names are misleading.** The branch called `1-0-stable` is the **0.1.x** line, not the
-> 1.0 line. `git describe` on this branch returns `0.1.31-1-gcf0bdfe`.
-
-### Where each consumer is pinned
-
-| Consumer | File | Pin | Notes |
+| Version | Line | Date | Notes |
 | --- | --- | --- | --- |
-| Peatio | `Dockerfile:13` | `KAIGARA_VERSION=0.1.34` | Downloaded from openware's GitHub releases at image build |
-| Barong | `Dockerfile:26` | `ARG KAIGARA_VERSION=0.1.34` | Same, with `#ARG KAIGARA_VERSION=v1.0.28` commented out |
-| OpenDAX | `lib/tasks/kaisave.rake` | `KAISAVE_VERSION = '0.1.27'` | Downloads `kaisave_<platform>` at task run time |
-| This fork | `1-0-stable` @ `cf0bdfe` | `0.1.31` + 1 commit | **Not built, not published, not consumed by anything** |
+| `0.2.0` | **CoinPort** | current | Parity with upstream `0.1.34`, plus the log-stream, signal-handling and restart fixes. No Openware dependency. Published from this repo |
+| `0.1.34` | upstream | 2022-03 | What Peatio and Barong used to download from Openware. Last upstream release on the `0.1.x` line |
+| `0.1.27` | upstream | 2021-11 | What OpenDAX's `kaisave.rake` used to pin |
+| `v1.0.36` | upstream | 2023-07 | Head of an unrelated series — see below |
 
-### What `1-0-stable` is missing relative to the deployed `0.1.34`
+`0.2.x` is CoinPort's own line. Upstream owns `0.1.x`, so starting a new minor
+keeps the namespaces distinct and makes it unambiguous which artifact a pin
+refers to.
 
-Seven commits are in the deployed binary but **not** on this branch:
+### The `v1.0.x` line
 
-```
-7bf218e Fix: Use deploymentID instead of passed database name (#55)
-05df6c4 Feature: Add kaienv cli tool (#54)
-1636269 Feature: Storage driver unit test
-e2763a0 Enhancement: Add golangci-lint to the CI
-22547d2 Feature: Add MySQL storage driver
-20206de Feature: Add storage interface
-ad1b8c3 Feature: Add encryptor interface + AES driver
-```
+Upstream's `master` carries a `v1.0.x` series (head `v1.0.36`, July 2023) that
+is a rewrite of the storage layer, not an upgrade path. **Do not swap a `1.0.x`
+binary in without changing configuration**, because two defaults are inverted
+relative to what this deployment relies on:
 
-Conversely this branch carries one commit that `0.1.34` does not: `cf0bdfe` (Vault API tests +
-go.mod cleanup).
+| Setting | `0.1.34` / `0.2.0` default | `v1.0.36` default |
+| --- | --- | --- |
+| `KAIGARA_STORAGE_DRIVER` | `vault` | **`sql`** |
+| `KAIGARA_ENCRYPTOR` | `transit` | **`plaintext`** |
 
-This explains why `templates/config/kaigara.env.erb` in OpenDAX has commented-out
-`KAIGARA_ENCRYPTOR`, `KAIGARA_ENCRYPTOR_AES_KEY`, and `KAIGARA_DATABASE_*` settings that are
-undocumented and unsupported by the code in this working tree — those options come from the
-storage/encryptor work that landed in `0.1.32`–`0.1.34` and matured in `1.0.x`.
+The encryptor default is the dangerous one. With `KAIGARA_STORAGE_DRIVER=vault`
+but no `KAIGARA_ENCRYPTOR`, a `1.0.x` binary reads the `secret` scope and hands
+the daemon the literal string `vault:v1:AbCd…` as its password — no error, just
+wrong credentials everywhere.
 
-### Release asset naming changed at v1.0.36
+Other differences: the `kaisave`/`kaidump`/`kaidel` binaries are replaced by a
+single `kai` with subcommands, `pkg/logstream` is removed in favour of
+`openware/pkg`, and the restart path became in-process. The commented-out
+`#KAIGARA_ENCRYPTOR=plaintext` line in
+`opendax/templates/config/kaigara.env.erb` is a half-finished migration to this
+line, and is set to the value that would break decryption.
 
-The Peatio/Barong Dockerfiles fetch a bare `kaigara` asset:
+Adopting `1.0.x` is a deliberate migration, not a version bump.
+
+## Where each consumer is pinned
+
+| Consumer | File | Pin |
+| --- | --- | --- |
+| Peatio | `Dockerfile` | `KAIGARA_VERSION=0.2.0` from `CoinPort/kaigara` releases |
+| Barong | `Dockerfile` | `ARG KAIGARA_VERSION=0.2.0` from `CoinPort/kaigara` releases |
+| OpenDAX | `lib/tasks/kaisave.rake` | `KAISAVE_VERSION = '0.2.0'` |
+
+All three previously downloaded from `openware/kaigara` at image-build time —
+an unauthenticated dependency on an unmaintained third party, with no fallback
+if the repo were archived.
+
+### The `curl` trap
+
+The old Dockerfile line was:
 
 ```dockerfile
 RUN curl -Lo /usr/bin/kaigara https://github.com/openware/kaigara/releases/download/${KAIGARA_VERSION}/kaigara
 ```
 
-| Tag | `kaigara` asset | Result of the command above |
-| --- | --- | --- |
-| `0.1.34` | present | works |
-| `v1.0.28` – `v1.0.35` | present | works |
-| `v1.0.36` | **absent** — renamed to `kaigara_linux_amd64` | **404** |
+Without `-f`, curl exits **0** on a 404 and writes the error body to the target.
+`chmod +x` then marks a 9-byte text file executable and the image builds green,
+failing only when a container starts. Measured against the missing asset:
 
-Because `curl` is invoked **without `-f`**, a 404 does not fail the build. Curl writes GitHub's
-error page to `/usr/bin/kaigara`, `chmod +x` marks it executable, and the image builds green — then
-every container fails at startup with an exec format error. Add `-f` (or `--fail-with-body`) to
-both Dockerfiles regardless of which version you settle on.
+```
+curl -Lo  → exit 0, 9-byte "Not Found" file written
+curl -fLo → exit 22, no file, RUN step fails
+```
+
+This was not hypothetical: upstream's `v1.0.36` renamed the asset from `kaigara`
+to `kaigara_linux_amd64`, so anyone bumping to it would have built a broken
+image silently. Both Dockerfiles now use `-f` plus a smoke test that runs the
+binary and checks its usage output.
 
 ## Deployment topology
 
-Kaigara is baked into the service images and used as the entrypoint wrapper. From
-`opendax/compose/app.yaml`:
+Kaigara is baked into the service images and used as the entrypoint wrapper:
 
 ```yaml
 peatio:
@@ -91,16 +93,15 @@ sonic:
   entrypoint: /bin/sh -c "kaigara ./bin/sonic serve"
 ```
 
-`config/kaigara.env` is rendered from `opendax/templates/config/kaigara.env.erb` and supplies
-`KAIGARA_VAULT_TOKEN`, `KAIGARA_VAULT_ADDR`, `KAIGARA_DEPLOYMENT_ID`, `KAIGARA_REDIS_URL`, and
-`VAULT_CACERT`. `KAIGARA_APP_NAME` is set per service.
+`config/kaigara.env` is rendered from `templates/config/kaigara.env.erb` and
+supplies `KAIGARA_VAULT_TOKEN`, `KAIGARA_VAULT_ADDR`, `KAIGARA_DEPLOYMENT_ID`,
+`KAIGARA_REDIS_URL` and `VAULT_CACERT`. `KAIGARA_APP_NAME` is set per service.
 
-Every service shares the same `KAIGARA_DEPLOYMENT_ID` (the lower-cased `app.name` from
-`config/app.yml`), and each gets a per-component Vault token whose policy is rendered from
-`opendax/templates/config/vault/kaigara.hcl.erb`.
+All services share a `KAIGARA_DEPLOYMENT_ID` (lower-cased `app.name` from
+`config/app.yml`) and each gets a per-component Vault token.
 
-Because Kaigara restarts a service by killing it, all Kaigara-wrapped services must run with
-`restart: always`. They do.
+Kaigara restarts a service by stopping the child and relying on the container's
+restart policy, so every wrapped service must run with `restart: always`. They do.
 
 ## Secrets workflow
 
@@ -110,75 +111,78 @@ config/secrets.yaml  ──kaisave──▶  Vault  ──kaigara──▶  daem
         └──────────kaidump───────────┘
 ```
 
-In OpenDAX this is driven by `rake kaisave:fetch` (downloads the binary) and `rake kaisave:save`
-(pushes `config/secrets.yaml`, using the `sonic_token`). To pull the current state back out, run
-`kaidump` with the same deployment ID.
+Driven by `rake kaisave:fetch` (downloads the binary) and `rake kaisave:save`
+(pushes `config/secrets.yaml` using the `sonic_token`).
 
-After `kaisave` writes a new version, every running Kaigara notices the version bump within 20
-seconds and kills its child, so **saving secrets triggers a rolling restart of every affected
-service**. Plan writes accordingly.
+After `kaisave` writes a new version, each running Kaigara notices within 20–30
+seconds and restarts its child, so **saving secrets rolls every affected
+service**. Since `0.2.0` the poll interval is jittered, so services restart
+staggered across that window rather than all on the same tick.
 
 ## Vault setup
 
-One-time, per Vault instance:
+Once per Vault instance:
 
 ```sh
 vault secrets enable -version=2 -path=secret kv
 vault secrets enable transit
 ```
 
-Per deployment, load the policy from `etc/kaigara.hcl` (or the OpenDAX ERB template) with
-`deployment_id` replaced by your `KAIGARA_DEPLOYMENT_ID`, then issue a token per component.
+Per deployment, load `etc/kaigara.hcl` with `deployment_id` replaced, then issue
+a token per component. The policy grants:
 
-The policy grants:
-
-* `read`/`list` on `secret/data/<deployment_id>/*` and `secret/metadata/<deployment_id>/*`
+* `read`/`list` on `secret/data/<deployment_id>/*` and `secret/metadata/…`
 * `create`/`update`/`read`/`list` on `transit/keys/<deployment_id>_kaigara_*`
 * `create`/`read`/`update` on `transit/encrypt/*` and `transit/decrypt/*`
 * `update` on `auth/token/renew` and `auth/token/lookup`
 
-Note that the read/list grants are **deployment-wide**, not per app. A token issued to Peatio can
-read Barong's `secret` scope ciphertext. It cannot *decrypt* it, because the transit key is per
-app — but the transit grant is also wildcarded to `<deployment_id>_kaigara_*`, so in practice a
-component token can decrypt any other component's secrets. Tightening this to
-`transit/decrypt/<deployment_id>_kaigara_<component>` is
-[S3 in IMPROVEMENTS.md](IMPROVEMENTS.md#s3).
+Those grants are **deployment-wide**, so a component token can read and decrypt
+any other component's secrets. The per-app transit key gives the appearance of
+isolation without delivering it — [S3](IMPROVEMENTS.md#s3).
 
-Kaigara auto-renews its token if the token is renewable. Issue renewable, periodic tokens
-(`-period=240h`) or Kaigara will stop being able to reload configuration when the token expires.
+Issue renewable, periodic tokens (`-period=240h`). Kaigara renews automatically
+only if the token is renewable; otherwise it stops being able to reload
+configuration when the token expires.
 
 ## Building and releasing
 
 ```sh
-make build     # bin/kaigara, bin/kaitail, bin/kaidump, bin/kaidel, bin/kaisave_<os>_<arch>
-make clean
+make build      # host platform
+make release    # all binaries x linux/darwin/windows x amd64/arm64 + SHA256SUMS
+make check      # fmt, vet, build, unit tests
 ```
 
-`kaisave` is cross-compiled for `darwin/arm64`, `darwin/amd64`, `linux/amd64`, and
-`windows/amd64` by `build-kaisave.sh`. `kaigara` itself is built **only for the host platform** —
-if you start publishing releases from this fork, that asymmetry needs fixing.
+`make release` produces `<binary>_<os>_<arch>` assets plus unsuffixed `kaigara`
+and `kaisave` aliases for consumers that fetch a bare name.
 
-CI is `.drone.yml`, which:
+CI is `.github/workflows/ci.yml`:
 
-* runs `go test ./...` against a `vault:1.5.3` dev service on **`golang:1.14`**,
-* bumps and pushes a patch tag on `master`,
-* on tag, builds and publishes to GitHub Releases via `ghr`.
+| Job | Does |
+| --- | --- |
+| `check` | gofmt, go vet, build, golangci-lint |
+| `test` | full suite against Vault, MySQL and PostgreSQL service containers |
+| `vulncheck` | govulncheck, reported for visibility |
+| `release` | on a tag, cross-compiles and publishes to GitHub Releases |
 
-**None of this works for the fork.** It targets the `master` branch (this repo's default branch is
-`1-0-stable`), authenticates with openware's Drone secrets, and publishes to
-`${DRONE_REPO_NAMESPACE}/${DRONE_REPO_NAME}`. See [I1 in IMPROVEMENTS.md](IMPROVEMENTS.md#i1).
+Release builds use Go 1.24 regardless of the `go` directive in `go.mod`. The
+toolchain, not the directive, determines which standard-library CVEs land in the
+shipped binary.
+
+**To cut a release:** tag `0.2.x`, push the tag, and CI publishes. Consumers
+pinning that version only work once the tag is pushed and the release job has
+finished.
 
 ## Troubleshooting
 
 | Symptom | Cause |
 | --- | --- |
-| Panic: `Metadata not found. Make sure you have enabled KV v2` | The `secret/` mount is kv v1. Re-mount with `-version=2` |
-| Panic on startup mentioning `transit` | The `transit` engine is not enabled, or the token lacks `transit/keys/*` capabilities |
+| `Metadata not found. Make sure you have enabled KV v2` | The `secret/` mount is kv v1. Re-mount with `-version=2` |
+| Startup failure mentioning `transit` | The `transit` engine is not enabled, or the token lacks `transit/keys/*` capabilities |
+| Daemon receives `vault:v1:…` as a password | `KAIGARA_ENCRYPTOR` does not match how the data was written. Should be `transit` |
 | `interface{} is bool` / `is json.Number` from `kaisave` | An unquoted boolean or number in `secrets.yaml`. Quote it |
-| `secretStore.SetSecret: <key> is not a string` | A non-string value in the `secret` scope. Only strings can be encrypted |
-| A secret exists in Vault but the daemon does not see it | It is a map or a list — those are skipped when building the environment. Flatten it, or use the `KFILE_` convention |
-| Service restarts every 20s | A version mismatch that never resolves. Usually a scope listed in `KAIGARA_SCOPES` that was written by another writer, or a `global` change loop — try `KAIGARA_IGNORE_GLOBAL=true` |
-| Service exits immediately, no logs | Kaigara panics before the child starts if Vault or Redis is unreachable. Check `KAIGARA_VAULT_ADDR` / `KAIGARA_REDIS_URL` reachability from inside the container |
-| Container takes 10s to stop | Expected. Kaigara does not forward `SIGTERM`; Docker waits for the timeout then `SIGKILL`s. See [C4](IMPROVEMENTS.md#c4) |
-| Truncated or garbled lines in the Redis log stream | Known bug — see [C2](IMPROVEMENTS.md#c2) |
-| Image builds fine but `kaigara` won't exec | The release asset 404'd and curl saved the error page. See [Release asset naming](#release-asset-naming-changed-at-v1036) |
+| `SetEntry: <key> is not a string` | A non-string value in the `secret` scope |
+| Secret exists but the daemon does not see it | It is a map or list — those are skipped. Flatten it, or use `KFILE_`. Check with `kaienv` |
+| Service restarts every 20–30s | A version mismatch that never resolves. Try `KAIGARA_IGNORE_GLOBAL=true` |
+| Service exits immediately, no logs | Kaigara fails before the child starts if Vault or Redis is unreachable. Check reachability from inside the container |
+| Image builds fine but `kaigara` won't exec | Pre-`0.2.0` Dockerfile without `curl -f`. The release asset 404'd and the error page was saved |
+| SQL driver: `too many clients already` | Fixed in `0.2.0` — `StorageService` leaked a connection pool per instantiation |

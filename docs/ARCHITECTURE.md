@@ -1,21 +1,22 @@
 # Kaigara Architecture
 
-> Describes the code on the **`1-0-stable`** branch (the `0.1.x` line). The `origin/master`
-> (`v1.0.x`) line is structured differently — see [OPERATIONS.md](OPERATIONS.md#version-map).
+Describes `0.2.0`.
 
 ## What problem it solves
 
-Services in the OpenDAX stack need their configuration — including credentials — delivered at
-process start, from a central store, without baking it into images or `.env` files. Kaigara is a
-thin wrapper that sits between the container entrypoint and the actual daemon:
+Services in the OpenDAX stack need their configuration — including credentials
+— delivered at process start, from a central store, without baking it into
+images or `.env` files. Kaigara sits between the container entrypoint and the
+daemon:
 
 ```
 docker entrypoint → kaigara → bundle exec puma
                       │
-                      ├── reads secrets from Vault  → child process env + files on disk
-                      ├── pipes child stdout/stderr  → Redis pub/sub
-                      ├── writes a heartbeat key     → Redis
-                      └── polls Vault for changes    → kills the child on change
+                      ├── reads config from the store → child env + files on disk
+                      ├── pipes child stdout/stderr    → Redis pub/sub
+                      ├── writes a heartbeat key       → Redis
+                      ├── forwards signals             → child
+                      └── polls for config changes     → graceful child restart
 ```
 
 ## Repository layout
@@ -23,196 +24,226 @@ docker entrypoint → kaigara → bundle exec puma
 ```
 cmd/
   kaigara/    the process wrapper (the main binary)
-  kaisave/    bulk YAML → Vault loader
-  kaidump/    Vault → YAML dumper
+  kaisave/    bulk YAML -> store loader
+  kaidump/    store -> YAML dumper
   kaidel/     delete one key across scopes
+  kaienv/     print the env Kaigara would build, without running anything
   kaitail/    tail the Redis log stream
+  env/        shared storage bootstrap used by the CLI tools
 pkg/
-  config/     KaigaraConfig (env parsing) and BuildCmdEnv (secrets → env/files)
+  config/     KaigaraConfig, BuildCmdEnv, GetStorageService
+  storage/
+    vault/    Vault kv v2 backend
+    sql/      MySQL/PostgreSQL backend (gorm)
+  encryptor/
+    transit/  Vault transit engine
+    aes/      in-process AES
+    plaintext/ no-op
+    types/    the Encryptor interface
   logstream/  LogStream interface + Redis implementation
-  utils/      GetEnv helper
-  vault/      SEPARATE Go module: the Vault SecretStore implementation
+  ika/        vendored config loader (was github.com/openware/pkg/ika)
+  database/   vendored gorm connection helper (was openware/pkg/database)
+  utils/
 types/
-  secretstore.go   the SecretStore interface
+  storage.go  the Storage interface
 etc/
-  backend.yml      docker-compose for local Vault + Redis
-  kaigara.hcl      Vault policy template
+  backend.yml local Vault, Redis, MySQL and PostgreSQL
+  kaigara.hcl Vault policy template
 ```
 
-### The `pkg/vault` submodule trap
-
-`pkg/vault` has **its own `go.mod`** (`github.com/openware/kaigara/pkg/vault`). The root module
-declares it as an ordinary versioned dependency:
-
-```
-github.com/openware/kaigara/pkg/vault v0.0.0-20210426162849-04557d766383
-```
-
-There is **no `replace` directive**. The binaries therefore compile against the copy downloaded
-from GitHub at that April 2021 commit, **not** against `pkg/vault/vault.go` in this working tree.
-Editing that file changes nothing until you add a `replace`. This is tracked as
-[C1 in IMPROVEMENTS.md](IMPROVEMENTS.md#c1).
+This is **one Go module**. Earlier versions split `pkg/encryptor` and
+`pkg/storage/*` into their own modules resolved from GitHub, which meant local
+edits to them did not affect the built binaries. That is gone.
 
 ## Startup sequence
 
-`cmd/kaigara/kaigara.go:171` `main()`:
+`cmd/kaigara/kaigara.go` `main()`:
 
-1. `initLogStream()` — reads `KAIGARA_REDIS_URL`. If empty, logs a notice and runs with a nil
-   client (streaming silently disabled). If set but unreachable, **panics**.
-2. `initConfig()` — `ika.ReadConfig("", cnf)` populates `KaigaraConfig` from `KAIGARA_*` env vars.
-3. `getVaultService()` — builds the Vault client, panicking if `KAIGARA_VAULT_TOKEN` or
-   `KAIGARA_DEPLOYMENT_ID` is missing, then starts token renewal.
-4. `kaigaraRun()` — builds the environment, writes files, starts the child, wires up the log
-   pumps, the heartbeat, and the config watcher.
+1. `seedJitter()` — per-process seed, because `math/rand` is not auto-seeded
+   before Go 1.20 and every service would otherwise pick the same poll offset.
+2. `initLogStream()` — reads `KAIGARA_REDIS_URL`. Empty means streaming is
+   disabled and output only goes to stdout.
+3. `ika.ReadConfig("", cnf)` — populates `KaigaraConfig` from `KAIGARA_*` and
+   `DATABASE_*` environment variables.
+4. `config.GetStorageService(cnf)` — builds the encryptor, then the storage
+   backend, from `KAIGARA_ENCRYPTOR` and `KAIGARA_STORAGE_DRIVER`.
+5. `kaigaraRun()` — builds the environment, writes files, starts the child, and
+   supervises it. Its return value becomes the process exit status.
 
-### Vault client and token renewal
+### Storage and encryptor selection
 
-`pkg/vault/vault.go:23` `NewService`:
+`pkg/config/config.go` `GetStorageService` is the single factory:
 
-* Builds `&api.Config{Address: addr, Timeout: 2 * time.Second}`. Because the Vault SDK's
-  `NewClient` falls back to `DefaultConfig()` for the HTTP client, standard Vault env vars such as
-  `VAULT_CACERT` **are** honoured for TLS. The **2-second timeout is hard-coded** and overrides the
-  SDK's 60s default; `VAULT_CLIENT_TIMEOUT` has no effect.
-* `startRenewToken` looks the token up, and if it is renewable, starts an
-  `api.LifetimeWatcher` goroutine that renews it for the life of the process. Non-renewable tokens
-  are used as-is and will eventually expire.
+| `KAIGARA_ENCRYPTOR` | Behaviour |
+| --- | --- |
+| `transit` *(default)* | Vault transit engine, key `<deploymentID>_kaigara_<appName>` |
+| `aes` | In-process AES with `KAIGARA_ENCRYPTOR_AES_KEY` |
+| `plaintext` | No encryption |
+
+| `KAIGARA_STORAGE_DRIVER` | Behaviour |
+| --- | --- |
+| `vault` *(default)* | Vault kv v2 |
+| `sql` | gorm against MySQL or PostgreSQL |
+
+The encryptor is orthogonal to the backend: the `secret` scope is encrypted
+before it reaches storage, so a SQL backend gets ciphertext too. **The encryptor
+must match how the data was written** — reading transit-encrypted data with the
+plaintext encryptor returns the ciphertext string rather than failing.
 
 ### Building the child environment
 
-`pkg/config/config.go:43` `BuildCmdEnv(appNames, secretStore, currentEnv, scopes)`:
+`pkg/config/config.go` `BuildCmdEnv(appNames, store, currentEnv, scopes)`:
 
-1. Copy the current process environment, **dropping every `KAIGARA_`-prefixed variable**. The child
-   never sees Kaigara's own configuration.
+1. Copy the current environment, **dropping every `KAIGARA_`-prefixed
+   variable**, so the child never sees Kaigara's own configuration.
 2. For each app in `["global"] + appNames`, for each scope in `scopes`:
-   * `LoadSecrets(app, scope)` — read `secret/data/<deploymentID>/<app>/<scope>` into memory.
-   * `GetSecrets(app, scope)` — return the values, decrypting the `secret` scope via transit.
-   * For each key/value:
-     * `map` and `[]interface{}` values are **skipped** — they cannot go into an env var.
-     * `bool` → `"true"`/`"false"`; `json.Number` → its literal digits; `string` → itself.
-       Anything else is skipped.
-     * If the key matches `(?i)^KFILE_(.*)_(PATH|CONTENT)$`, it contributes to a `File` entry
-       instead of an env var.
+   * `Read(app, scope)` loads the scope into memory.
+   * `GetEntries(app, scope)` returns the values, decrypting `secret`.
+   * Per key/value:
+     * `map` and `[]interface{}` values are **skipped** — they cannot be
+       represented in an environment variable.
+     * `bool` → `"true"`/`"false"`; `json.Number` → its digits; `string` → itself.
+     * Keys matching `(?i)^KFILE_(.*)_(PATH|CONTENT)$` become a file instead.
      * Otherwise the key is **upper-cased** and appended as `KEY=value`.
 
-Because apps are processed in order with `global` first, and env vars are appended rather than
-deduplicated, a later app's value shadows an earlier one — the child's runtime sees the last
-occurrence.
+Apps are processed with `global` first, and vars are appended rather than
+deduplicated, so a later app's value shadows an earlier one at exec time.
 
-Any Vault error during this phase **panics**, taking the daemon down before it starts.
+`kaienv` runs exactly this and prints the result, which is the quickest way to
+answer "why doesn't the daemon see this secret".
 
 ### Materialising files
 
-`cmd/kaigara/kaigara.go:56`. For each `File` collected above, Kaigara creates the parent directory
-(`0750`) and writes the content (`0640`). The path comes straight from Vault, so **write access to
-a scope is equivalent to arbitrary file write as the daemon user** — see
-[S1 in IMPROVEMENTS.md](IMPROVEMENTS.md#s1).
+Files are written with the parent directory at `0750` and the file at `0640`.
+The path comes straight from the store, so write access to a scope is
+equivalent to arbitrary file write as the daemon user —
+[S1](IMPROVEMENTS.md#s1).
 
-### Process supervision
+## Process supervision
 
-* STDIN: a goroutine reads lines from Kaigara's stdin and forwards them to the child, closing the
-  child's stdin on EOF.
-* STDOUT/STDERR: two goroutines call `LogStream.Publish`, which writes each chunk to Kaigara's own
-  stdout **and** publishes it to Redis.
-* On exit, `c.Wait()` errors are handled with `log.Fatal`, so **the child's exit code is not
-  propagated** — Kaigara always exits `0` or `1`.
-* There is **no signal handling**. `SIGTERM` to Kaigara does not reach the child, so containers
-  never shut down gracefully and always hit the Docker/Kubernetes kill timeout.
-
-## Vault data model
+Since `0.2.0` there is one supervisor loop, `superviseChild`, and it is the only
+place that signals the child:
 
 ```
-secret/data/<deploymentID>/<appName>/<scope>       ← kv v2 data
-secret/metadata/<deploymentID>/<appName>/<scope>   ← kv v2 metadata (version numbers)
-transit/keys/<deploymentID>_kaigara_<appName>      ← per-app encryption key
+     ┌──────────────┐  child exits   ┌──────────────────┐
+     │  c.Wait()    ├───────────────▶│                  │
+     └──────────────┘                │                  │
+     ┌──────────────┐  SIGTERM/INT   │  superviseChild  │──▶ exit status
+     │ signal.Notify├───────────────▶│                  │
+     └──────────────┘                │                  │
+     ┌──────────────┐  version bump  │                  │
+     │ watchSecrets ├───────────────▶│                  │
+     └──────────────┘                └──────────────────┘
+                                              │
+                                    SIGTERM, then SIGKILL
+                                    after shutdownGrace (8s)
 ```
 
-* `<deploymentID>` — `KAIGARA_DEPLOYMENT_ID`, one per environment. In OpenDAX it is the
-  lower-cased app name from `config/app.yml`.
-* `<appName>` — a component (`peatio`, `barong`, `sonic`, …), plus the reserved `global` app that
-  every component inherits, and `tokens` used by `PushPolicies`.
+* **Signals.** `SIGTERM`, `SIGINT` and `SIGHUP` are forwarded to the child.
+  `SIGHUP` is passed through as a reload hint and does not start the shutdown
+  clock. Before `0.2.0` there was no signal handling at all, so stopping the
+  container orphaned the daemon and the runtime killed it after the stop
+  timeout.
+* **Exit status.** The child's status is propagated, using `128+signal` for
+  signalled children. Previously `c.Wait()` errors went to `log.Fatal`, so
+  Kaigara always exited 0 or 1.
+* **Grace period.** `shutdownGrace` is 8 seconds, under Docker's default 10s
+  stop timeout, so the daemon rather than the runtime decides how it stops.
+
+### STDIN and log pumps
+
+A goroutine forwards Kaigara's stdin to the child line by line, closing the
+child's stdin on EOF. Two more pump stdout and stderr through
+`LogStream.Publish`, which writes to Kaigara's own stdout **and** publishes to
+Redis.
+
+## Storage data model
+
+Vault:
+
+```
+secret/data/<deploymentID>/<appName>/<scope>       kv v2 data
+secret/metadata/<deploymentID>/<appName>/<scope>   version numbers
+transit/keys/<deploymentID>_kaigara_<appName>      per-app encryption key
+```
+
+SQL: a single `data` table in database `kaigara_<deploymentID>`, one row per
+`(app_name, scope)` holding a JSON blob and a version. The database name is
+derived from the deployment ID and **overrides `DATABASE_NAME`**.
+
+* `<deploymentID>` — one per environment.
+* `<appName>` — a component, plus the reserved `global` that every component
+  inherits.
 * `<scope>` — `public`, `private`, or `secret`.
 
-Kaigara requires **kv v2**. `LoadSecrets` panics with an explicit message if the read response has
-no `metadata` key, which is what a kv v1 mount looks like.
-
-### The `secret` scope and transit encryption
-
-`LoadSecrets` calls `initTransitKey`, which creates `transit/keys/<deploymentID>_kaigara_<appName>`
-on first use. `SetSecret` on the `secret` scope base64-encodes the plaintext, calls
-`transit/encrypt/...`, and stores the resulting `vault:v1:...` ciphertext. `GetSecret` reverses it.
-
-Consequences:
-
-* Values in the `secret` scope **must be strings**. Anything else returns an error.
-* Reading `secret` scope values with the Vault CLI gives you ciphertext, not plaintext.
-* The transit key is per-app, so a token scoped to one app cannot decrypt another's secrets — this
-  is what makes the per-component policies in `etc/kaigara.hcl` meaningful.
-* The `initTransitKey` error is **discarded** at `pkg/vault/vault.go:183`, so a missing `transit`
-  mount surfaces later as a confusing encrypt/decrypt failure rather than a clear startup error.
+Vault requires **kv v2**; a v1 mount has no `metadata` in the read response and
+Kaigara fails at startup saying so.
 
 ## Log streaming
 
-`pkg/logstream/redis.go`. Channels are derived from the app names joined with `&`:
+Channels derive from the app names joined with `&`:
 
 ```
 log.<appNames>.stdout
 log.<appNames>.stderr
 ```
 
-For `KAIGARA_APP_NAME=peatio,peatio_daemons` that is `log.peatio&peatio_daemons.stdout`.
+`Publish` reads into a 64 KiB buffer and publishes `buf[:n]`. Before `0.2.0` it
+published the whole 64-byte buffer, so every short read appended stale bytes
+from the previous iteration to the message. Messages are chunk-aligned, not
+line-aligned — a subscriber may receive a partial line.
 
-`Publish` reads the child's pipe into a **64-byte** buffer and publishes each chunk. Two problems
-follow: chunks are not line-aligned, so subscribers receive arbitrary fragments; and the publish
-call sends the **whole buffer** rather than the bytes actually read, so stale bytes from the
-previous iteration are appended to every short read
-([C2 in IMPROVEMENTS.md](IMPROVEMENTS.md#c2)).
+A publish failure is logged, not fatal: a logging problem should not take the
+wrapped daemon down.
 
 ### Heartbeat
 
-`HeartBeat` sets Redis key `service.<appNames>` with a 20-second TTL and refreshes the TTL every 10
-seconds, deleting the key on shutdown. External health checks can watch for its absence.
+`HeartBeat` sets Redis key `service.<appNames>` with a 20-second TTL, refreshes
+it every 10 seconds, and deletes it on shutdown.
 
 ## Configuration reload
 
-`cmd/kaigara/kaigara.go:140` `exitWhenSecretsOutdated` runs on a 20-second ticker. For each app and
-scope it compares:
+`watchSecrets` polls every 20–30 seconds (jittered) comparing:
 
-* `GetCurrentVersion` — the kv v2 `version` from the metadata **cached in memory at startup**, and
-* `GetLatestVersion` — `current_version` read live from `secret/metadata/...`.
+* `GetCurrentVersion` — the version cached in memory at startup, and
+* `GetLatestVersion` — read live from the store.
 
-If they differ, it logs and calls `c.Process.Kill()`. Kaigara does not restart anything itself — it
-relies on the container's `restart: always` policy to bring the service back with fresh
-configuration. `KAIGARA_IGNORE_GLOBAL=true` removes `global` from this watch list only; global
+On a difference it reports the reason on a channel and returns; the supervisor
+does the stopping. Kaigara does not restart anything itself — it relies on the
+container's `restart: always` to bring the service back with fresh config.
+
+`KAIGARA_IGNORE_GLOBAL=true` removes `global` from the watch list only; global
 secrets are still loaded at startup.
 
-`SIGKILL` means the daemon gets no chance to drain connections or finish in-flight work. The
-`v1.0.x` line replaced this with an in-process restart
-([`5b2b1a6`, `eb9dd54`](OPERATIONS.md#version-map)).
+The jitter matters at stack scale: without it every service polls on the same
+tick and one `kaisave` run restarts everything simultaneously.
 
-## The SecretStore interface
+## The Storage interface
 
-`types/secretstore.go` abstracts the backend:
+`types/storage.go`:
 
 ```go
-type SecretStore interface {
-	LoadSecrets(appName, scope string) error
-	SaveSecrets(appName, scope string) error
-	SetSecret(appName, name string, value interface{}, scope string) error
-	SetSecrets(appName string, data map[string]interface{}, scope string) error
-	GetSecret(appName, name, scope string) (interface{}, error)
-	GetSecrets(appName, scope string) (map[string]interface{}, error)
-	ListSecrets(appName, scope string) ([]string, error)
-	DeleteSecret(appName, name, scope string) error
+type Storage interface {
+	Read(appName, scope string) error
+	Write(appName, scope string) error
+
+	SetEntry(appName, scope, name string, value interface{}) error
+	SetEntries(appName, scope string, data map[string]interface{}) error
+	GetEntry(appName, scope, name string) (interface{}, error)
+	GetEntries(appName, scope string) (map[string]interface{}, error)
+	ListEntries(appName, scope string) ([]string, error)
+	DeleteEntry(appName, scope, name string) error
 	ListAppNames() ([]string, error)
+
 	GetCurrentVersion(appName, scope string) (int64, error)
 	GetLatestVersion(appName, scope string) (int64, error)
 }
 ```
 
-`vault.Service` is the only implementation on this branch. `KAIGARA_SECRET_STORE` is parsed into
-`KaigaraConfig` but never read — the Vault store is hard-wired at every call site. The `v1.0.x`
-line generalises this into `pkg/storage` with Vault and SQL backends plus a separate
-`pkg/encryptor` abstraction.
+`Read` must be called before any getter for a given `(app, scope)`; the getters
+index an in-memory map and will panic on a missing entry otherwise —
+[B6](IMPROVEMENTS.md#b6).
 
-`LoadSecrets` must be called before any other method for a given `(app, scope)` pair; the getters
-type-assert on an in-memory map and will panic on a nil entry otherwise.
+`StorageService.Close` releases the SQL connection pool. `NewStorageService`
+opens a fresh pool per call, so anything constructing more than one over a
+process lifetime must close the ones it finishes with.
