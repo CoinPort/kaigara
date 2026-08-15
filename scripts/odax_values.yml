@@ -1,3 +1,14 @@
+# Fixture for scripts/bin-test.sh. Every value here is a placeholder.
+#
+# This file previously held credential-shaped strings -- Vault service
+# tokens in the `s.<24 chars>` format, database and SMTP passwords, an
+# API key and DSNs with inline passwords. They were inherited from
+# upstream and appeared to be generated rather than live, but they were
+# indistinguishable from real credentials to anyone reading the repo or
+# running a secret scanner over it.
+#
+# Keep it that way: placeholders are prefixed `example-`, and hostnames
+# use `.invalid` or the generic service names the test asserts on.
 secrets:
   finex:
     scopes:
@@ -5,37 +16,37 @@ secrets:
         finex_database_driver: mysql
         finex_database_host: mysql-v4.core
         finex_database_port: "3306"
-        finex_gotrue_pub_key: AeZ0tie1thae6lee9red
+        finex_gotrue_pub_key: example-gotrue-pub-key
         finex_influx_host: influxdb-0.core,influxdb-1.core,influxdb-2.core
         finex_influx_port: "8086"
         finex_influx_scheme: http
-        finex_key: ga8eiphahz0Ooph8Eih0
+        finex_key: example-finex-key
         finex_log_level: debug
         finex_mode: prod
         finex_vault_addr: http://vault.core:8200
         finex_vault_app: opendax_uat
-        finex_vault_contract_address: Xohthoh5ohl7eepihuul
+        finex_vault_contract_address: example-contract-address
         require_quote_amount_roles: sa_maker
       public: {}
       secret:
         finex_database_name: finex_opendax_uat
-        finex_database_password: fuc2KeGio6paekiefahn
+        finex_database_password: example-finex-db-password
         finex_database_username: finex_opendax_uat
         finex_deployment_id: opendax_uat
         finex_influx_database: finex_opendax_uat
-        finex_influx_password: zie8uPhe2aebae9viroh
+        finex_influx_password: example-finex-influx-password
         finex_influx_username: opendax
-        finex_license_key: eiJohdo9eish3Cooshus
-        finex_vault_broker_private_key: ujahDoo1ohmie7taipox
-        finex_vault_rpc_url: wss://rinkeby.infura.io/ws/v3/Uzeep6eiGoozui7ohsh9
+        finex_license_key: example-license-key
+        finex_vault_broker_private_key: example-broker-private-key
+        finex_vault_rpc_url: wss://rpc.example.invalid/ws/v3/example-project-id
   frontdex:
     scopes:
       private:
         next_public_chain_id: "4"
-        next_public_custody_contract: Feibie7ooCachie3eePh
+        next_public_custody_contract: example-custody-contract
       public: {}
       secret:
-        next_public_infura_id: bie9niNgoohadoorai5a
+        next_public_infura_id: example-infura-id
   global:
     scopes:
       private: {}
@@ -59,21 +70,21 @@ secrets:
         gotrue_mailer_urlpaths_confirmation: /verify
         gotrue_mailer_urlpaths_invite: /verify
         gotrue_mailer_urlpaths_recovery: /verify
-        gotrue_operator_token: Jo8eengeiz4poocohtei
-        gotrue_smtp_admin_email: riashaid7di1HooBoo3z
-        gotrue_smtp_host: smtp.mailgun.org
-        gotrue_smtp_pass: quoiN0Iegoote7hoik0V
+        gotrue_operator_token: example-operator-token
+        gotrue_smtp_admin_email: admin@example.invalid
+        gotrue_smtp_host: smtp.example.invalid
+        gotrue_smtp_pass: example-smtp-password
         gotrue_smtp_port: "25"
-        gotrue_smtp_user: QueeWai1Dailef6ies3y
+        gotrue_smtp_user: example-smtp-user
       public: {}
       secret:
-        database_url: postgres://gotrue_odax_example:thaiDooJohw9baechaiH@postgresql.core:5432/opendax_odax_example
+        database_url: postgres://gotrue_odax_example:example-gotrue-db-password@postgresql.core:5432/opendax_odax_example
         gotrue_database_host: postgresql.core
         gotrue_database_name: opendax_odax_example
-        gotrue_database_password: eiyehiaFei0eing4Caiy
+        gotrue_database_password: example-gotrue-db-password
         gotrue_database_username: gotrue_odax_example
         gotrue_disable_signup: "false"
-        gotrue_jwt_secret: ahteebieHo1Eequ2Eeth
+        gotrue_jwt_secret: example-jwt-secret
   postgrest:
     scopes:
       private: {}
@@ -81,9 +92,9 @@ secrets:
       secret:
         pgrst_db_host: postgresql.core
         pgrst_db_name: opendax_odax_example
-        pgrst_db_pass: iey2Mei1aib5ioz0Kai3
+        pgrst_db_pass: example-pgrst-db-password
         pgrst_db_port: "5432"
-        pgrst_db_uri: postgres://postgrest_odax_example:ricuPheechau8feezahb@postgresql.core:5432/opendax_odax_example
+        pgrst_db_uri: postgres://postgrest_odax_example:example-pgrst-db-password@postgresql.core:5432/opendax_odax_example
         pgrst_db_username: postgrest_odax_example
   realtime:
     scopes:
@@ -92,7 +103,7 @@ secrets:
       secret:
         realtime_db_host: postgresql.core
         realtime_db_name: opendax_odax_example
-        realtime_db_pass: bahchiePaeh0eeDuoW2i
+        realtime_db_pass: example-realtime-db-password
         realtime_db_username: realtime_odax_example
   storage:
     scopes:
@@ -101,22 +112,22 @@ secrets:
       secret:
         storage_db_host: postgresql.core
         storage_db_name: opendax_odax_example
-        storage_db_pass: esaishahSe7Amu7Iefi4
-        storage_db_uri: postgres://example:phocie0Ma8ooFalei6Ah@postgresql.core:5432/opendax_odax_example
+        storage_db_pass: example-storage-db-password
+        storage_db_uri: postgres://storage_odax_example:example-storage-db-password@postgresql.core:5432/opendax_odax_example
         storage_db_username: storage_odax_example
   tokens:
     scopes:
       private: {}
       public: {}
       secret:
-        applogicVaultToken: s.eem6Aedie3teetheila9eeVei
-        barongAuthzVaultToken: s.shoGh9ec6osaTo1iij9aehais
-        barongServerVaultToken: s.iequ0doo8ohc9ie5chie5eePh
-        electrumdBackupVaultToken: s.va0ep3TiShau6chae8chu0Dah
-        finexVaultToken: s.Ai8Hah5pohphoh9chaef0shuo
-        hdwalletVaultToken: s.bae4aepayei0oothier2theiG
-        kaigaraVaultToken: s.ChohteifaeJaehiCeiL3mah9s
-        peatioCryptoVaultToken: s.Axaim4woneeleog0Ietheo7ia
-        peatioRailsVaultToken: s.iaPu8xaiquahLafiePosh1Coh
-        peatioUpstreamVaultToken: s.iet0ohxei5lahChugh2OteeTu
-        sonicVaultToken: s.goo1oGohh6ahbav6ahwohghie
+        applogicVaultToken: example-applogic-vault-token
+        barongAuthzVaultToken: example-barong-authz-vault-token
+        barongServerVaultToken: example-barong-server-vault-token
+        electrumdBackupVaultToken: example-electrumd-backup-vault-token
+        finexVaultToken: example-finex-vault-token
+        hdwalletVaultToken: example-hdwallet-vault-token
+        kaigaraVaultToken: example-kaigara-vault-token
+        peatioCryptoVaultToken: example-peatio-crypto-vault-token
+        peatioRailsVaultToken: example-peatio-rails-vault-token
+        peatioUpstreamVaultToken: example-peatio-upstream-vault-token
+        sonicVaultToken: example-sonic-vault-token

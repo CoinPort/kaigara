@@ -86,21 +86,34 @@ func Create(cnf *Config) error {
 
 // Drop the database MySQL/SQLite with given db context
 func Drop(cnf *Config) error {
-	var err error
 	// No need to exec drop database cmd for SQlite
-	if cnf.Driver != "memory" {
-		// Connect to the database with given config
-		dbName := cnf.Name
-		cnf.Name = ""
-		db, err := Connect(cnf)
+	if cnf.Driver == "memory" {
+		// Closing the connection also drops the in-memory database.
+		sql, err := db.DB()
 		if err != nil {
 			return err
 		}
-		cnf.Name = dbName
-		err = db.Exec(fmt.Sprintf("DROP DATABASE `%s`;", cnf.Name)).Error
+		return sql.Close()
 	}
-	// Close the database connection, SQLite also drop the in-memory database
-	sql, _ := db.DB()
-	sql.Close()
-	return err
+
+	// Connect to the server without selecting the database being dropped.
+	dbName := cnf.Name
+	cnf.Name = ""
+	conn, err := Connect(cnf)
+	if err != nil {
+		return err
+	}
+	cnf.Name = dbName
+
+	// Close the connection this function opened, not whichever one the
+	// package global happens to point at. `db, err := Connect(cnf)` used to
+	// shadow both variables, so the DROP error was discarded and Drop
+	// always reported success.
+	defer func() {
+		if sql, dbErr := conn.DB(); dbErr == nil {
+			sql.Close()
+		}
+	}()
+
+	return conn.Exec(fmt.Sprintf("DROP DATABASE `%s`;", cnf.Name)).Error
 }

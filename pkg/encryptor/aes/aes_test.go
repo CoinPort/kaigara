@@ -12,6 +12,18 @@ func TestAESEncryptorWrongKey(t *testing.T) {
 	require.Error(t, err)
 }
 
+// A ciphertext shorter than the GCM nonce used to return ("", nil), so the
+// caller read it as a successful decryption to the empty string and the
+// wrapped daemon received an empty environment variable instead of an error.
+func TestAESDecryptShortCiphertext(t *testing.T) {
+	s, err := NewAESEncryptor([]byte("1234567890123456"))
+	require.NoError(t, err)
+
+	plain, err := s.Decrypt("AAAA", "")
+	require.Error(t, err)
+	assert.Equal(t, "", plain)
+}
+
 func TestAESEncryptor(t *testing.T) {
 	s, err := NewAESEncryptor([]byte("1234567890123456"))
 	require.NoError(t, err)

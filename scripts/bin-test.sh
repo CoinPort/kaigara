@@ -26,24 +26,28 @@ export KAIGARA_ENCRYPTOR_AES_KEY=changemechangemechangeme
 export DATABASE_HOST="0.0.0.0"
 export DATABASE_POOL=1
 
+# Values must match scripts/odax_values.yml, which this script loads with
+# kaisave before asserting. The GOTRUE/PGRST/REALTIME entries used to
+# assert on an `odax_yellow_com` deployment that the fixture no longer
+# contains, so those assertions could not pass.
 ASSERTS=("FINEX_DATABASE_USERNAME:finex_opendax_uat"
-  "FINEX_DATABASE_PASSWORD:fuc2KeGio6paekiefahn"
+  "FINEX_DATABASE_PASSWORD:example-finex-db-password"
   "FINEX_DATABASE_NAME:finex_opendax_uat"
   "FINEX_DATABASE_HOST:mysql-v4.core"
   "FINEX_INFLUX_USERNAME:opendax"
-  "FINEX_INFLUX_PASSWORD:zie8uPhe2aebae9viroh"
+  "FINEX_INFLUX_PASSWORD:example-finex-influx-password"
   "FINEX_INFLUX_HOST:influxdb-0.core,influxdb-1.core,influxdb-2.core"
-  "GOTRUE_DATABASE_USERNAME:gotrue_odax_yellow_com"
-  "GOTRUE_DATABASE_PASSWORD:eiyehiaFei0eing4Caiy"
-  "GOTRUE_DATABASE_NAME:opendax_odax_yellow_com"
+  "GOTRUE_DATABASE_USERNAME:gotrue_odax_example"
+  "GOTRUE_DATABASE_PASSWORD:example-gotrue-db-password"
+  "GOTRUE_DATABASE_NAME:opendax_odax_example"
   "GOTRUE_DATABASE_HOST:postgresql.core"
-  "PGRST_DB_USERNAME:postgrest_odax_yellow_com"
-  "PGRST_DB_PASS:iey2Mei1aib5ioz0Kai3"
-  "PGRST_DB_NAME:opendax_odax_yellow_com"
+  "PGRST_DB_USERNAME:postgrest_odax_example"
+  "PGRST_DB_PASS:example-pgrst-db-password"
+  "PGRST_DB_NAME:opendax_odax_example"
   "PGRST_DB_HOST:postgresql.core"
-  "REALTIME_DB_USERNAME:realtime_odax_yellow_com"
-  "REALTIME_DB_PASS:bahchiePaeh0eeDuoW2i"
-  "REALTIME_DB_NAME:opendax_odax_yellow_com"
+  "REALTIME_DB_USERNAME:realtime_odax_example"
+  "REALTIME_DB_PASS:example-realtime-db-password"
+  "REALTIME_DB_NAME:opendax_odax_example"
   "REALTIME_DB_HOST:postgresql.core")
 
 DELETES=("FINEX_DATABASE_HOST"

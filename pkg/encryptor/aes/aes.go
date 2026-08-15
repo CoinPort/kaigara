@@ -64,7 +64,10 @@ func (ae *AESEncryptor) Decrypt(ciphertext, appName string) (string, error) {
 
 	nonceSize := aead.NonceSize()
 	if len(encryptData) < nonceSize {
-		return "", err
+		// err is nil here. Returning it reported success and handed the
+		// caller an empty string, so a truncated ciphertext reached the
+		// daemon as an empty environment variable instead of an error.
+		return "", fmt.Errorf("ciphertext is %d bytes, shorter than the %d-byte nonce", len(encryptData), nonceSize)
 	}
 
 	nonce, cipherText := encryptData[:nonceSize], encryptData[nonceSize:]

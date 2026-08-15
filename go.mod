@@ -5,7 +5,6 @@ go 1.19
 require (
 	github.com/go-redis/redis/v7 v7.2.0
 	github.com/hashicorp/vault/api v1.3.1
-	github.com/iancoleman/strcase v0.3.0
 	github.com/stretchr/testify v1.8.4
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1

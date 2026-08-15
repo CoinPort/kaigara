@@ -12,13 +12,21 @@ env:
   # determines which standard-library CVEs end up in the shipped binary.
   GO_VERSION: '1.24'
 
+# Read-only by default. The release job widens this for itself; no other
+# job needs to write to the repository.
+permissions:
+  contents: read
+
+# Third-party actions are pinned to a commit SHA rather than a tag. A tag
+# is mutable, and `release` below runs with `contents: write`, so a
+# re-pointed tag would be able to publish binaries under our name.
 jobs:
   check:
     name: Format, vet and build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -33,10 +41,15 @@ jobs:
         run: make build
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6
         with:
-          version: latest
+          # Pinned, not `latest`. golangci-lint v2 changed the config
+          # schema and needs action v7+, so `latest` now resolves to a
+          # release that cannot read .golangci.yml.
+          version: v1.64.8
           args: --timeout=5m
+        # Still advisory: forcetypeassert was just enabled and its backlog
+        # has not been worked yet. Drop this line once it is clean.
         continue-on-error: true
 
   test:
@@ -80,8 +93,8 @@ jobs:
       DATABASE_PORT: '3306'
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -101,8 +114,8 @@ jobs:
     name: govulncheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -121,19 +134,25 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      # The tag name goes through the environment rather than being
+      # interpolated into the script. Git permits ';', '$', '|' and
+      # backticks in a ref name, so `VERSION=${{ github.ref_name }}`
+      # let a crafted tag run commands in this `contents: write` job.
       - name: Cross-compile
-        run: make release VERSION=${{ github.ref_name }}
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: make release VERSION="$VERSION"
 
       - name: Publish
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
             bin/*

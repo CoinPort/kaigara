@@ -154,7 +154,9 @@ func (ss *StorageService) ListEntries(appName, scope string) ([]string, error) {
 		return []string{}, nil
 	}
 
-	res := make([]string, len(val))
+	// Capacity, not length: make([]string, len(val)) followed by append
+	// returns the keys behind len(val) leading empty strings.
+	res := make([]string, 0, len(val))
 	for k := range val {
 		res = append(res, k)
 	}

@@ -8,6 +8,12 @@ run:
 linters:
   enable:
     - errcheck
+    # errcheck covers dropped errors but NOT unchecked type assertions --
+    # `x.(T)` without the comma-ok form. That is forcetypeassert, and the
+    # Vault store has ~18 of them, each one turning an unexpected API
+    # response into a panic in the container entrypoint. The CI job is
+    # still advisory while that backlog is worked.
+    - forcetypeassert
     - govet
     - ineffassign
     - staticcheck

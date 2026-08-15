@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/vault/api"
-	"github.com/iancoleman/strcase"
 )
 
 // Service contains scoped secret data, Vault client and configuration
@@ -344,40 +343,17 @@ func (vs *Service) ListAppNames() ([]string, error) {
 	return res, nil
 }
 
-func (vs *Service) PushPolicies(policies map[string]string) error {
-	err := vs.Read("tokens", "secret")
-	if err != nil {
-		return err
-	}
-
-	for component, rules := range policies {
-		name := fmt.Sprintf("%s_%s", vs.deploymentID, component)
-		fmt.Println("Loading policy", name)
-		err := vs.vault.Sys().PutPolicy(name, rules)
-		if err != nil {
-			return err
-		}
-
-		fmt.Println("Creating token", name)
-		t := true
-		token, err := vs.vault.Auth().Token().Create(&api.TokenCreateRequest{
-			Policies:  []string{name},
-			Renewable: &t,
-			TTL:       "240h",
-			Period:    "240h",
-		})
-		if err != nil {
-			return err
-		}
-
-		keyName := strcase.ToLowerCamel(component + "_vault_token")
-		err = vs.SetEntry("tokens", keyName, token.Auth.ClientToken, "secret")
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
+// PushPolicies was removed. It had no callers, was not part of
+// types.Storage, and passed SetEntry's arguments in the wrong order:
+//
+//	SetEntry("tokens", keyName, token.Auth.ClientToken, "secret")
+//	          appName  scope    name                    value
+//
+// which made the freshly minted Vault token the map key and "secret" the
+// value. The scope was then not "secret", so the token skipped encryption
+// entirely; in practice it panicked first on the uninitialised scope map.
+// Anything reviving policy provisioning should be written against the
+// current interface rather than restored from history.
 
 // GetCurrentVersion returns current data version in cache
 func (vs *Service) GetCurrentVersion(appName, scope string) (int64, error) {
