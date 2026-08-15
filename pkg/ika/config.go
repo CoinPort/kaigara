@@ -13,7 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v2"
+	// yaml.v3, not v2: the rest of the tree already uses v3, and carrying
+	// both put two YAML parsers in every binary. The file-parsing path
+	// below is unreachable from the Kaigara commands anyway -- they all
+	// call ReadConfig("") and read only the environment.
+	"gopkg.in/yaml.v3"
 )
 
 const (
