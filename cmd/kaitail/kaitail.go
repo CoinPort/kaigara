@@ -4,8 +4,8 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/openware/kaigara/pkg/logstream"
-	"github.com/openware/kaigara/pkg/utils"
+	"github.com/CoinPort/kaigara/pkg/logstream"
+	"github.com/CoinPort/kaigara/pkg/utils"
 )
 
 var (

@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/openware/kaigara/pkg/database"
-	"github.com/openware/kaigara/pkg/ika"
+	"github.com/CoinPort/kaigara/pkg/database"
+	"github.com/CoinPort/kaigara/pkg/ika"
 )
 
 // TODO

@@ -8,14 +8,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openware/kaigara/pkg/database"
-	"github.com/openware/kaigara/pkg/encryptor/aes"
-	"github.com/openware/kaigara/pkg/encryptor/plaintext"
-	"github.com/openware/kaigara/pkg/encryptor/transit"
-	encryptor "github.com/openware/kaigara/pkg/encryptor/types"
-	"github.com/openware/kaigara/pkg/storage/sql"
-	"github.com/openware/kaigara/pkg/storage/vault"
-	"github.com/openware/kaigara/types"
+	"github.com/CoinPort/kaigara/pkg/database"
+	"github.com/CoinPort/kaigara/pkg/encryptor/aes"
+	"github.com/CoinPort/kaigara/pkg/encryptor/plaintext"
+	"github.com/CoinPort/kaigara/pkg/encryptor/transit"
+	encryptor "github.com/CoinPort/kaigara/pkg/encryptor/types"
+	"github.com/CoinPort/kaigara/pkg/storage/sql"
+	"github.com/CoinPort/kaigara/pkg/storage/vault"
+	"github.com/CoinPort/kaigara/types"
 	"gorm.io/gorm/logger"
 )
 

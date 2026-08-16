@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	cnfenv "github.com/openware/kaigara/pkg/ika"
+	cnfenv "github.com/CoinPort/kaigara/pkg/ika"
 )
 
 // ExampleGetDescription builds a description text from structure tags

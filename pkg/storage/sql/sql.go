@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/openware/kaigara/pkg/database"
-	"github.com/openware/kaigara/pkg/encryptor/types"
+	"github.com/CoinPort/kaigara/pkg/database"
+	"github.com/CoinPort/kaigara/pkg/encryptor/types"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"

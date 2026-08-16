@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openware/kaigara/pkg/config"
-	"github.com/openware/kaigara/pkg/ika"
+	"github.com/CoinPort/kaigara/pkg/config"
+	"github.com/CoinPort/kaigara/pkg/ika"
 )
 
 var cnf = &config.KaigaraConfig{}

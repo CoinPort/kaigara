@@ -6,7 +6,7 @@ Openware config for golang supporting json, yaml and ENV configs 12factor compli
 
 ## Usage
 
-`go get github.com/openware/kaigara/pkg/ika`
+`go get github.com/CoinPort/kaigara/pkg/ika`
 
 ### Example config and usage
 

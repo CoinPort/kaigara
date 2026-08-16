@@ -17,10 +17,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/openware/kaigara/pkg/config"
-	"github.com/openware/kaigara/pkg/ika"
-	"github.com/openware/kaigara/pkg/logstream"
-	"github.com/openware/kaigara/types"
+	"github.com/CoinPort/kaigara/pkg/config"
+	"github.com/CoinPort/kaigara/pkg/ika"
+	"github.com/CoinPort/kaigara/pkg/logstream"
+	"github.com/CoinPort/kaigara/types"
 )
 
 const (

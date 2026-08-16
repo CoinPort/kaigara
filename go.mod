@@ -1,4 +1,4 @@
-module github.com/openware/kaigara
+module github.com/CoinPort/kaigara
 
 go 1.19
 

@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/openware/kaigara/pkg/config"
-	"github.com/openware/kaigara/pkg/ika"
-	"github.com/openware/kaigara/types"
+	"github.com/CoinPort/kaigara/pkg/config"
+	"github.com/CoinPort/kaigara/pkg/ika"
+	"github.com/CoinPort/kaigara/types"
 )
 
 func main() {
