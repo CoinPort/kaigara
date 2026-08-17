@@ -1,0 +1,12 @@
+# Keep the image build context to sources: everything below is either large,
+# host-specific, or a secret that has no business inside a build.
+.git
+.github
+.claude
+bin
+docs
+etc
+scripts
+*.env
+.env
+secrets.yaml
