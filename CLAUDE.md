@@ -103,9 +103,12 @@ reachable Vault — even for a `-run` that would not touch it. `cmd/kaigara`'s
 * `go.mod` declares Go 1.26 and CI builds with the 1.26 toolchain. The
   toolchain, not the directive, is what determines the standard-library CVEs in
   the shipped binary; the directive is what sets the language and GODEBUG
-  defaults. Nothing builds this module from source outside CI — all three
-  consumers download a release binary — so the directive no longer has to
-  track any build host.
+  defaults. Two consumers do compile this module from source, so the directive
+  constrains their build hosts: `peatio`'s `Dockerfile` has a `kaigara-build`
+  stage and `barong`'s a `kaigara-builder` stage over its vendored copy. Both
+  base images must be `golang:1.26` or newer, or the build falls back to
+  downloading a 1.26 toolchain (`GOTOOLCHAIN=auto`) — and fails outright where
+  that is pinned to `local`. Raising the directive here means raising those.
 * Storage paths are always `secret/{data,metadata}/<deploymentID>/<appName>/<scope>`
   and transit keys `<deploymentID>_kaigara_<appName>`. Use the
   `secretPath`/`keyPath`/`metadataPath` helpers rather than formatting inline.

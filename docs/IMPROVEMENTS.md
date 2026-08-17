@@ -180,9 +180,10 @@ to `vault/api` v1.9+, which is a behaviour change and belongs in its own commit
 once `0.2.0` has soaked.
 
 The `go` directive is 1.26 and **release builds use Go 1.26**, which is what
-actually determines the standard-library CVEs in the shipped binary. Raising
-the directive dropped the last reason to keep it behind the toolchain: nothing
-outside CI builds this module from source.
+actually determines the standard-library CVEs in the shipped binary. Note that
+CI is not the only thing compiling this module: `peatio` and `barong` both build
+`cmd/kaigara` from source in their Dockerfiles, so their `golang:` base images
+have to keep up with the directive.
 
 ### <a id="b2"></a>B2 — `DeleteEntry` deletes the whole scope, then rewrites it
 
