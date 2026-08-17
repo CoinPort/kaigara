@@ -4,8 +4,9 @@ Status as of `0.2.0`. Items marked **Fixed** are resolved in this repo; the rest
 are open, with the reason they were left.
 
 **Verified state:** `go build ./...`, `go vet ./...` and `gofmt -l .` are clean.
-The full suite passes against Vault 1.15, MySQL 8 and PostgreSQL 14 on Go 1.19,
-1.21, 1.22 and 1.24.
+The full suite passes against Vault 1.15, MySQL 8 and PostgreSQL 14. The `go`
+directive and CI toolchain are both 1.26; the suite was previously verified on
+1.19, 1.21, 1.22 and 1.24, and those are no longer supported build toolchains.
 
 ---
 
@@ -178,9 +179,10 @@ release**), pulled in by `hashicorp/vault/api v1.3.1`. Clearing it means moving
 to `vault/api` v1.9+, which is a behaviour change and belongs in its own commit
 once `0.2.0` has soaked.
 
-The `go` directive is 1.19 to match the build host's toolchain; **release builds
-use Go 1.24**, which is what actually determines the standard-library CVEs in
-the shipped binary.
+The `go` directive is 1.26 and **release builds use Go 1.26**, which is what
+actually determines the standard-library CVEs in the shipped binary. Raising
+the directive dropped the last reason to keep it behind the toolchain: nothing
+outside CI builds this module from source.
 
 ### <a id="b2"></a>B2 — `DeleteEntry` deletes the whole scope, then rewrites it
 

@@ -12,8 +12,8 @@ CoinPort OpenDAX stack (`kaigara bundle exec puma ...`).
 
 CoinPort's fork of the unmaintained
 [openware/kaigara](https://github.com/openware/kaigara). Current release
-`0.2.0` — parity with upstream `0.1.34` plus supervision fixes, and no
-remaining Openware dependency.
+`0.2.1` — parity with upstream `0.1.34` plus supervision fixes, dependency
+reduction and security fixes, and no remaining Openware dependency.
 
 ## Read these before changing anything
 
@@ -100,10 +100,12 @@ reachable Vault — even for a `-run` that would not touch it. `cmd/kaigara`'s
 
 ## Conventions
 
-* `go.mod` declares Go 1.19 to match the build host. Release builds use Go 1.24
-  in CI — the toolchain, not the directive, is what determines the
-  standard-library CVEs in the shipped binary. Verified building and testing
-  clean on 1.19, 1.21, 1.22 and 1.24.
+* `go.mod` declares Go 1.26 and CI builds with the 1.26 toolchain. The
+  toolchain, not the directive, is what determines the standard-library CVEs in
+  the shipped binary; the directive is what sets the language and GODEBUG
+  defaults. Nothing builds this module from source outside CI — all three
+  consumers download a release binary — so the directive no longer has to
+  track any build host.
 * Storage paths are always `secret/{data,metadata}/<deploymentID>/<appName>/<scope>`
   and transit keys `<deploymentID>_kaigara_<appName>`. Use the
   `secretPath`/`keyPath`/`metadataPath` helpers rather than formatting inline.

@@ -114,8 +114,6 @@ func TestSuperviseChildRestartRequestIsGraceful(t *testing.T) {
 }
 
 func TestPollIntervalStaysInWindow(t *testing.T) {
-	seedJitter()
-
 	seen := map[time.Duration]bool{}
 	for i := 0; i < 200; i++ {
 		d := pollInterval()
@@ -124,8 +122,8 @@ func TestPollIntervalStaysInWindow(t *testing.T) {
 		seen[d] = true
 	}
 
-	// If the source were unseeded or the jitter dropped, every service would
-	// poll on the same tick and restart together.
+	// If the jitter were dropped, every service would poll on the same tick
+	// and restart together.
 	assert.Greater(t, len(seen), 1, "poll interval should vary")
 }
 

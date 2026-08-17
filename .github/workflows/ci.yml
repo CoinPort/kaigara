@@ -10,7 +10,7 @@ env:
   # Release artifacts are built with a current toolchain regardless of the
   # `go` directive in go.mod. The toolchain, not the directive, is what
   # determines which standard-library CVEs end up in the shipped binary.
-  GO_VERSION: '1.24'
+  GO_VERSION: '1.26'
 
 # Read-only by default. The release job widens this for itself; no other
 # job needs to write to the repository.

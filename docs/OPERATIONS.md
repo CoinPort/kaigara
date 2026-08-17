@@ -6,7 +6,8 @@ How Kaigara is built, versioned, and deployed in the CoinPort stack.
 
 | Version | Line | Date | Notes |
 | --- | --- | --- | --- |
-| `0.2.0` | **CoinPort** | current | Parity with upstream `0.1.34`, plus the log-stream, signal-handling and restart fixes. No Openware dependency. Published from this repo |
+| `0.2.1` | **CoinPort** | current | Dependency reduction, security fixes, green test suite. What all three consumers pin |
+| `0.2.0` | **CoinPort** | 2026-08 | Parity with upstream `0.1.34`, plus the log-stream, signal-handling and restart fixes. No Openware dependency. Published from this repo |
 | `0.1.34` | upstream | 2022-03 | What Peatio and Barong used to download from Openware. Last upstream release on the `0.1.x` line |
 | `0.1.27` | upstream | 2021-11 | What OpenDAX's `kaisave.rake` used to pin |
 | `v1.0.36` | upstream | 2023-07 | Head of an unrelated series — see below |
@@ -45,9 +46,9 @@ Adopting `1.0.x` is a deliberate migration, not a version bump.
 
 | Consumer | File | Pin |
 | --- | --- | --- |
-| Peatio | `Dockerfile` | `KAIGARA_VERSION=0.2.0` from `CoinPort/kaigara` releases |
-| Barong | `Dockerfile` | `ARG KAIGARA_VERSION=0.2.0` from `CoinPort/kaigara` releases |
-| OpenDAX | `lib/tasks/kaisave.rake` | `KAISAVE_VERSION = '0.2.0'` |
+| Peatio | `Dockerfile` | `KAIGARA_VERSION=0.2.1` from `CoinPort/kaigara` releases |
+| Barong | `Dockerfile` | `ARG KAIGARA_VERSION=0.2.1` from `CoinPort/kaigara` releases |
+| OpenDAX | `lib/tasks/kaisave.rake` | `KAISAVE_VERSION = '0.2.1'` |
 
 All three previously downloaded from `openware/kaigara` at image-build time —
 an unauthenticated dependency on an unmaintained third party, with no fallback
@@ -72,8 +73,8 @@ curl -fLo → exit 22, no file, RUN step fails
 
 This was not hypothetical: upstream's `v1.0.36` renamed the asset from `kaigara`
 to `kaigara_linux_amd64`, so anyone bumping to it would have built a broken
-image silently. Both Dockerfiles now use `-f` plus a smoke test that runs the
-binary and checks its usage output.
+image silently. Both Dockerfiles now use `-f`. Neither verifies a checksum or
+smoke-tests the binary yet — Barong tracks that as an open item.
 
 ## Deployment topology
 
@@ -164,9 +165,9 @@ CI is `.github/workflows/ci.yml`:
 | `vulncheck` | govulncheck, reported for visibility |
 | `release` | on a tag, cross-compiles and publishes to GitHub Releases |
 
-Release builds use Go 1.24 regardless of the `go` directive in `go.mod`. The
+Release builds use Go 1.26, matching the `go` directive in `go.mod`. The
 toolchain, not the directive, determines which standard-library CVEs land in the
-shipped binary.
+shipped binary; bump `GO_VERSION` in the workflow to pick up a newer one.
 
 **To cut a release:** tag `0.2.x`, push the tag, and CI publishes. Consumers
 pinning that version only work once the tag is pushed and the release job has

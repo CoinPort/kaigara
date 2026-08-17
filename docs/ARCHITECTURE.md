@@ -59,16 +59,19 @@ edits to them did not affect the built binaries. That is gone.
 
 `cmd/kaigara/kaigara.go` `main()`:
 
-1. `seedJitter()` — per-process seed, because `math/rand` is not auto-seeded
-   before Go 1.20 and every service would otherwise pick the same poll offset.
-2. `initLogStream()` — reads `KAIGARA_REDIS_URL`. Empty means streaming is
+1. `initLogStream()` — reads `KAIGARA_REDIS_URL`. Empty means streaming is
    disabled and output only goes to stdout.
-3. `ika.ReadConfig("", cnf)` — populates `KaigaraConfig` from `KAIGARA_*` and
+2. `ika.ReadConfig("", cnf)` — populates `KaigaraConfig` from `KAIGARA_*` and
    `DATABASE_*` environment variables.
-4. `config.GetStorageService(cnf)` — builds the encryptor, then the storage
+3. `config.GetStorageService(cnf)` — builds the encryptor, then the storage
    backend, from `KAIGARA_ENCRYPTOR` and `KAIGARA_STORAGE_DRIVER`.
-5. `kaigaraRun()` — builds the environment, writes files, starts the child, and
+4. `kaigaraRun()` — builds the environment, writes files, starts the child, and
    supervises it. Its return value becomes the process exit status.
+
+There is no explicit jitter seeding step. `pollInterval()` relies on the
+auto-seeded global `math/rand` source, which Go provides for main modules
+declaring `go >= 1.20`, so every wrapped service still picks its own poll
+offset instead of restarting on the same tick.
 
 ### Storage and encryptor selection
 

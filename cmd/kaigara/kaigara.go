@@ -294,15 +294,12 @@ func watchSecrets(store types.Storage, appNames, scopes []string, restart chan<-
 	}
 }
 
-// seedJitter gives each process its own jitter sequence. Before Go 1.20 the
-// global source is seeded to a constant, which would hand every wrapped
-// service an identical "random" poll interval and defeat the spreading.
-func seedJitter() {
-	rand.Seed(time.Now().UnixNano() ^ int64(os.Getpid()))
-}
-
 // pollInterval spreads the version check over a window so that a single
 // kaisave run does not restart every wrapped service on the same tick.
+//
+// The global source no longer needs seeding: Go auto-seeds it for main
+// modules declaring go >= 1.20, and rand.Seed is a no-op from go >= 1.24.
+// An explicit seed here would be dead code that reads as load-bearing.
 func pollInterval() time.Duration {
 	jitter := time.Duration(rand.Int63n(int64(pollJitter)))
 	return pollBase + jitter
@@ -310,7 +307,6 @@ func pollInterval() time.Duration {
 
 func main() {
 	log.SetPrefix("[Kaigara] ")
-	seedJitter()
 	if len(os.Args) < 2 {
 		panic("Usage: kaigara CMD [ARGS...]")
 	}
